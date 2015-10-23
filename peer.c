@@ -73,6 +73,13 @@ void process_inbound_udp(int sock) {
 
   /* finally call spiffy_sendto() to send back the packet*/
   /* TODO: send back the response*/
+  if( NULL == response ){
+    /* can not generate a response or no data avaiable */
+    return;
+  }
+  else{
+    /* send back the response */
+  }
 }
 
 void process_get(char *chunkfile, char *outputfile) {
@@ -85,9 +92,15 @@ void process_get(char *chunkfile, char *outputfile) {
   }
   /* build the WHOHAS packet   WHOHAS = '0'*/
   data_packet_t *packet = init_packet('0',  data);
-  handle_packet(packet, &config);
 
   /* TODO: call spiffy_sendto() to flood the WHOHAS packet */
+  if( NULL == packet ){
+    printf( "can not generate a packet\n ");
+    return;
+  }
+  else{
+    /* send here */
+  }
 }
 
 void handle_user_input(char *line, void *cbdata) {
