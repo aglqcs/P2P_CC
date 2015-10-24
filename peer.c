@@ -73,10 +73,10 @@ void process_inbound_udp(int sock) {
   data_packet_t *packet = build_packet_from_buf(buf);
  
   printf("packet build: %s\n", packet->data); 
-  if(packet->header.packet_type == '0'){
+  if(packet->header.packet_type == 0){
     printf("Receive WHOHAS\n");
   }
-  else if(packet->header.packet_type == '1'){
+  else if(packet->header.packet_type == 1){
     printf("Receive IHAVE\n");
   }
   else{
@@ -182,6 +182,7 @@ void peer_run(bt_config_t *config) {
 
 /* Broadcast WHOHAS request to all node except myself */
 void broadcast(data_packet_t *packet, bt_config_t *config){
+    printf("AAAAAAAA");
     bt_peer_t *node;
     short my_id = config->identity;
 
