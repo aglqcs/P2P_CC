@@ -208,7 +208,7 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config){
 		char data[1500];
 		memset(data, 0 ,1500);
 		int reply_count = 0;
-
+        int find = 0;
 		char * chunkfile = config->has_chunk_file;
 		if ( read_chunkfile(chunkfile, local_has) < 0 ){
 			printf("Can not locate local chunkfile = %s\n", chunkfile);
