@@ -232,30 +232,15 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 				request_chunk[j - hash_start] = packet->data[j];
 			}
 			if( 1 == find_in_local_has(request_chunk, local_has) ){
-<<<<<<< HEAD
 				printf("find a valid local hash [%s]\n", request_chunk);
 				find = 1;
 				for( j = 0;j < 20;j ++){
 					data[reply_count + j] = request_chunk[j];
 				}
-=======
-				find = 1;
-                strcat(data, request_chunk);
->>>>>>> Add not response test
 				reply_count += 20;
 			}
 		}
 		data[reply_count] = '\0';
-<<<<<<< HEAD
-=======
-        printf("data: %s\n", data);
-		if( find == 1){
-            return init_packet('1', data);
-        }
-        else{
-            return NULL;
-        }
->>>>>>> Add not response test
 
 		if( find == -1){
 			return NULL;
@@ -290,7 +275,6 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 
 			// init the recv list
 			init_recv_buffer(sockfd);
-
 
 			data[20] = '\0';
 			if ( ret == NULL ){
