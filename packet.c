@@ -146,6 +146,7 @@ data_packet_t *handle_packet(data_packet_t *packet, bt_config_t* config){
 				request_chunk[j - hash_start] = packet->data[j];
 			}
 			if( 1 == find_in_local_has(request_chunk, local_has) ){
+				printf("find a valid local hash [%s]\n", request_chunk);
 				strcat(data, request_chunk);
 				reply_count += 20;
 			}
@@ -158,5 +159,65 @@ data_packet_t *handle_packet(data_packet_t *packet, bt_config_t* config){
 		/* TODO(for next checkpoint) : if incoming packet is other packets*/
 	}
 	return NULL;
+}
+
+data_packet_list_t *generate_WHOHAS(char *chunkfile){
+  	data_packet_list_t *ret = NULL;
+
+  	char data[1200];
+  	FILE *fp = fopen( chunkfile, "r");
+  	if( fp == NULL ){
+    	printf("%s can not be found\n", chunkfile);
+    	return NULL;
+  	}
+  	int index = 0;
+  	char line[40];
+  	memset(line, 0, 40);
+  	int count = 0;
+  	while( fscanf(fp, "%d %s\n", &index, line)  > 0 ){
+  		/* the max size of this line should less then 40 */
+  		if( strlen( line ) > 40 )
+  			return NULL;
+  		int i;
+  		for(i = 0;i < 40;i += 2){
+  			data[count + i / 2] = line[i] << 4 | line[i + 1];
+  		}
+  		count += 20;
+  	
+  		memset(line, 0, 40);
+
+  		if( count >= 1000 ){
+  			data[count] = '\0';
+  			data_packet_t *packet = init_packet('0',  data);
+  			if ( ret == NULL ){
+  				ret = (data_packet_list_t *)malloc( sizeof(data_packet_list_t));
+  				ret->packet = packet;
+  				ret->next = NULL;
+  			}
+  			else{
+  				data_packet_list_t *new_block = (data_packet_list_t *)malloc( sizeof(data_packet_list_t));
+  				new_block->packet = packet;
+  				new_block->next = ret;
+  				ret = new_block;
+  			}
+  			count = 0;
+  			memset(data, 0 , 1200);
+  		}
+  	}
+
+  	data[count] = '\0';
+  	data_packet_t *packet = init_packet('0',  data);
+  	if ( ret == NULL ){
+  		ret = (data_packet_list_t *)malloc( sizeof(data_packet_list_t));
+  		ret->packet = packet;
+  		ret->next = NULL;
+  	}
+  	else{
+ 		data_packet_list_t *new_block = (data_packet_list_t *)malloc( sizeof(data_packet_list_t));
+  		new_block->packet = packet;
+  		new_block->next = ret;
+  		ret = new_block;
+  	}
+  	return ret;
 }
 

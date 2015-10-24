@@ -3,7 +3,6 @@
 
 #define PACKETLEN 1500
 
-
 typedef struct header_s {
   short magicnum;
   char version;
@@ -19,7 +18,13 @@ typedef struct data_packet {
   char data[100];
 } data_packet_t;
 
+typedef struct data_packet_list{
+	data_packet_t *packet;
+	struct data_packet_list_t *next;
+} data_packet_list_t;
+
 data_packet_t *init_packet(char type, char *data);
 int read_chunkfile(char * chunkfile, char *ret);
 data_packet_t *build_packet_from_buf(char *buf);
 data_packet_t *handle_packet(data_packet_t *packet, bt_config_t* config);
+data_packet_list_t *generate_WHOHAS(char *chunkfile);

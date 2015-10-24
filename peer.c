@@ -85,21 +85,17 @@ void process_inbound_udp(int sock) {
 void process_get(char *chunkfile, char *outputfile) {
   /* Here open the chunkfile, and write data based on the content of chunkfile*/
   /* notice that here I hard code the length of data to 100, is this enough ?*/ 
-  char data[100];
-  int count;
-  if( (count = read_chunkfile(chunkfile, data)) < 0){
-    return;
-  }
-  /* build the WHOHAS packet   WHOHAS = '0'*/
-  data_packet_t *packet = init_packet('0',  data);
 
-  /* TODO: call spiffy_sendto() to flood the WHOHAS packet */
-  if( NULL == packet ){
-    printf( "can not generate a packet\n ");
+  data_packet_list_t *whohas_list = generate_WHOHAS(chunkfile);
+
+  if( NULL == whohas_list){
+    printf("can not generate a packet\n");
     return;
   }
-  else{
-    /* send here */
+  data_packet_list_t *head;
+  for( head = whohas_list; head != NULL; head = head->next){
+    data_packet_t *packet = head->packet;
+    /* TODO: call spiffy_sendto() to flood this WHOHAS packet*/
   }
 }
 
@@ -164,3 +160,4 @@ void peer_run(bt_config_t *config) {
     }
   }
 }
+
