@@ -129,7 +129,7 @@ data_packet_t *handle_packet(data_packet_t *packet, bt_config_t* config){
 		char data[100];
 		memset(data, 0 ,100);
 		int reply_count = 0;
-
+        int find = 0;
 		char * chunkfile = config->has_chunk_file;
 		if ( read_chunkfile(chunkfile, local_has) < 0 ){
 			printf("Can not locate local chunkfile = %s\n", chunkfile);
@@ -146,13 +146,19 @@ data_packet_t *handle_packet(data_packet_t *packet, bt_config_t* config){
 				request_chunk[j - hash_start] = packet->data[j];
 			}
 			if( 1 == find_in_local_has(request_chunk, local_has) ){
-				strcat(data, request_chunk);
+				find = 1;
+                strcat(data, request_chunk);
 				reply_count += 20;
 			}
 		}
 		data[reply_count] = '\0';
         printf("data: %s\n", data);
-		return init_packet('1', data);
+		if( find == 1){
+            return init_packet('1', data);
+        }
+        else{
+            return NULL;
+        }
 
 	}
 	else{
