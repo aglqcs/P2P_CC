@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "bt_parse.h"
-
-
+#include <netinet/in.h>
+#include "chunk.h"
 /*
 for convenient show the structrue here
 
@@ -36,47 +36,45 @@ int read_chunkfile(char * chunkfile, char *data){
   	int count = 0;
   	while( fscanf(fp, "%d %s\n", &index, line)  > 0 ){
   		/* the max size of this line should less then 40 */
-  		if( strlen( line ) > 40 )
+  		printf("line = %s\n", line);
+        if( strlen( line ) > 40 )
   			return -1;
-  		int i;
+  		/*int i;
   		for(i = 0;i < 40;i += 2){
   			data[count + i / 2] = line[i] << 4 | line[i + 1];
-  		}
+  		}*/
+        hex2binary(line, 40, data + count);
   		count += 20;
   		memset(line, 0, 40);
 
   	}
   	data[count] = '\0';
-	return count;  	
+    printf("data = %s datalen = %d\n", data, strlen(data));
+    return count;  	
 }
 data_packet_t *init_packet(char type, char *data){
 	printf("init_packet()\n");
 	/* if data length larger than 100, return a null pointer */
 	unsigned int data_length;
 	if( (data_length = strlen(data)) > 100){
+        printf("data_length > 100");
 		return NULL;
 	}
 
 	data_packet_t *packet = (data_packet_t *) malloc( sizeof(data_packet_t));
 	memset( packet, 0, sizeof(data_packet_t));
-
+    printf("Clear packets\n");
 	packet->header.magicnum = 15441;
 	packet->header.version = 1;
 	packet->header.packet_type = type;
 	packet->header.header_len = 16;
 	packet->header.packet_len = data_length + 16;
-
-	/* if type == WHOHAS || IHAVE , ignore the seq_num and ack_num */
-	if( type == '0' || type == '1'){
-	}
-	else{
-		// else write the two fields
-	}
-
 	/* write the data */
 
+    printf("determine type: %c\n", type);
 	/* if type == WHOHAS || IHAVE , write the count of hashes and do the padding */
-	if( type == '0' || type == '1'){
+	if( type == 0 || type == 1){
+        printf("its WHOHAS | IHAVE\n");
 		char padding[4];
 		padding[0] = data_length / 20;
 		padding[1] = padding[2] = padding[3] = 1;
@@ -86,9 +84,42 @@ data_packet_t *init_packet(char type, char *data){
 		packet->header.packet_len += 4;
 	}
 	else{
+        printf("Not WHOHAS | IHAVE\n");
 		// write datafield for other packet type
 	}
+    printf("start converting bit ordering...\n");
+    /* convert the bit ordering*/
+   /* unsigned int *pointer = &packet;
+    pointer[0] = htonl(pointer[0]);
+    printf("pointer[0] done....\n");
+    pointer[1] = htonl(pointer[1]);
+    printf("pointer[1] done....\n");
+    pointer[2] = htonl(pointer[2]);
+    printf("pointer[2] done....\n");
+    pointer[3] = htonl(pointer[3]);
+    printf("pointer[3] done....\n");
+    */
+    packet->header.magicnum = htons(packet->header.magicnum);
+    printf("1\n");
+    packet->header.header_len = htons(packet->header.header_len);
+    printf("2\n");
+    packet->header.packet_len = htons(packet->header.packet_len);
+    printf("3\n");
+    packet->header.seq_num = htonl(packet->header.seq_num);
+    printf("4\n");
+    packet->header.ack_num = htonl(packet->header.ack_num);
+    printf("5\n");
 
+     int i;
+    printf("dsasfdasfads %d\n", strlen(packet->data));
+     for(i = 0;i < 40;i ++){
+         char a1 =  packet->data[4 + i] >> 4;
+         char a2 =  packet->data[4+i] << 4 >> 4;
+         printf("%c%c",a1,a2);
+     }
+ 
+         printf("\n");
+    printf("Finish init packet, start return ..... \n");
 	return packet;
 }
 
@@ -119,7 +150,7 @@ int find_in_local_has(char *hash, char *local){
 
 
 data_packet_t *handle_packet(data_packet_t *packet, bt_config_t* config){
-	if(packet->header.packet_type == '0'){
+	if(packet->header.packet_type == 0){
 		/* if incoming packet is a WHOHAS packet */
 		/* scan the packet datafiled to fetch the hashes and get the count */
 		int count = packet->data[0];
@@ -154,7 +185,7 @@ data_packet_t *handle_packet(data_packet_t *packet, bt_config_t* config){
 		data[reply_count] = '\0';
         printf("data: %s\n", data);
 		if( find == 1){
-            return init_packet('1', data);
+            return init_packet(1, data);
         }
         else{
             return NULL;

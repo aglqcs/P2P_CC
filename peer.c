@@ -73,10 +73,10 @@ void process_inbound_udp(int sock) {
   data_packet_t *packet = build_packet_from_buf(buf);
  
   printf("packet build: %s\n", packet->data); 
-  if(packet->header.packet_type == '0'){
+  if(packet->header.packet_type == 0){
     printf("Receive WHOHAS\n");
   }
-  else if(packet->header.packet_type == '1'){
+  else if(packet->header.packet_type == 1){
     printf("Receive IHAVE\n");
   }
   else{
@@ -87,7 +87,7 @@ void process_inbound_udp(int sock) {
 
   /* finally call spiffy_sendto() to send back the packet*/
   /* TODO: send back the response*/
-  if(response != NULL && response->header.packet_type == '1'){
+  if(response != NULL && response->header.packet_type == 1){
     printf("Send IHAVE\n");
     spiffy_sendto(sock, response, sizeof(data_packet_t), 0, (struct sockaddr *) &from, sizeof(struct sockaddr));
   }
@@ -101,10 +101,13 @@ void process_get(char *chunkfile, char *outputfile) {
   if( (count = read_chunkfile(chunkfile, data)) < 0){
     return;
   }
+  printf("Process get start\n");
   /* build the WHOHAS packet   WHOHAS = '0'*/
-  data_packet_t *packet = init_packet('0',  data);
-
+  data_packet_t *packet = init_packet(0,  data);
+  printf("init packet done\n");
   /* call spiffy_sendto() to flood the WHOHAS packet */
+
+
   broadcast(packet, &config);
 }
 
@@ -173,6 +176,7 @@ void peer_run(bt_config_t *config) {
 
 /* Broadcast WHOHAS request to all node except myself */
 void broadcast(data_packet_t *packet, bt_config_t *config){
+    printf("AAAAAAAA");
     bt_peer_t *node;
     short my_id = config->identity;
     // int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -188,7 +192,9 @@ void broadcast(data_packet_t *packet, bt_config_t *config){
         spiffy_sendto(sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *) &node->addr, sizeof(struct sockaddr));
         // Iterate to next node
         node = node->next;
-    }          
+    }         
+        printf("BBBBBBBBBBBBBBBAAAAAAAA");
+   
     return;
 }
 
