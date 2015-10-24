@@ -151,6 +151,7 @@ data_packet_t *handle_packet(data_packet_t *packet, bt_config_t* config){
 			}
 		}
 		data[reply_count] = '\0';
+        printf("data: %s\n", data);
 		return init_packet('1', data);
 
 	}
