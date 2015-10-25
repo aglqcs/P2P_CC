@@ -57,7 +57,6 @@ void process_inbound_udp(int sock) {
   struct sockaddr_in from;
   socklen_t fromlen;
   char buf[BUFLEN];
-  int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
 
   fromlen = sizeof(from);
   spiffy_recvfrom(sock, buf, BUFLEN, 0, (struct sockaddr *) &from, &fromlen);
@@ -68,27 +67,14 @@ void process_inbound_udp(int sock) {
 	 ntohs(from.sin_port),
 	 buf);
 
-  printf("packet not build yet\n");
   /* first generate the incoming packet */
   data_packet_t *packet = build_packet_from_buf(buf);
  
-  printf("packet build: %s\n", packet->data); 
-  if(packet->header.packet_type == 0){
-    printf("Receive WHOHAS\n");
-  }
-  else if(packet->header.packet_type == 1){
-    printf("Receive IHAVE\n");
-  }
-  else{
-    printf("other requets: %c\n", packet->header.packet_type);
-  }
   /* next parse this packet and build the response packet*/
   data_packet_t *response = handle_packet(packet, &config);
 
   /* finally call spiffy_sendto() to send back the packet*/
-  /* TODO: send back the response*/
   if(response != NULL && response->header.packet_type == 1){
-    printf("Send IHAVE\n");
     spiffy_sendto(sock, response, sizeof(data_packet_t), 0, (struct sockaddr *) &from, sizeof(struct sockaddr));
   }
 }
@@ -101,13 +87,9 @@ void process_get(char *chunkfile, char *outputfile) {
   if( (count = read_chunkfile(chunkfile, data)) < 0){
     return;
   }
-  printf("Process get start\n");
   /* build the WHOHAS packet   WHOHAS = '0'*/
   data_packet_t *packet = init_packet(0,  data);
-  printf("init packet done\n");
   /* call spiffy_sendto() to flood the WHOHAS packet */
-
-
   broadcast(packet, &config);
 }
 
@@ -162,8 +144,7 @@ void peer_run(bt_config_t *config) {
     
     if (nfds > 0) {
       if (FD_ISSET(sock, &readfds)) {
-          printf("FD_ISSET socket from readfd\n");
-	process_inbound_udp(sock);
+	    process_inbound_udp(sock);
       }
       
       if (FD_ISSET(STDIN_FILENO, &readfds)) {
@@ -176,10 +157,8 @@ void peer_run(bt_config_t *config) {
 
 /* Broadcast WHOHAS request to all node except myself */
 void broadcast(data_packet_t *packet, bt_config_t *config){
-    printf("AAAAAAAA");
     bt_peer_t *node;
     short my_id = config->identity;
-    // int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
 
     node = config->peers;
     while(node!=NULL){
@@ -193,9 +172,6 @@ void broadcast(data_packet_t *packet, bt_config_t *config){
         // Iterate to next node
         node = node->next;
     }         
-        printf("BBBBBBBBBBBBBBBAAAAAAAA");
-   
     return;
 }
 
-/* Receive IHAVE */
