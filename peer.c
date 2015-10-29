@@ -24,6 +24,8 @@
 
 void peer_run(bt_config_t *config);
 bt_config_t config;
+int sock;
+
 
 int main(int argc, char **argv) {
 
@@ -69,16 +71,20 @@ void process_inbound_udp(int sock) {
   data_packet_t *packet = build_packet_from_buf(buf);
 
   /* next parse this packet and build the response packet*/
-  data_packet_t *response = handle_packet(packet, &config);
+  data_packet_list_t *response_list = handle_packet(packet, &config);
 
   /* finally call spiffy_sendto() to send back the packet*/
-  /* TODO: send back the response*/
-  if( NULL == response ){
+  if( NULL == response_list ){
     /* can not generate a response or no data avaiable */
     return;
   }
   else{
-    /* send back the response */
+    data_packet_list_t *head;
+    for( head = response_list; head != NULL; head = head->next ){
+      data_packet_t *packet = head->packet;
+      /* TODO: send back this packet */
+      spiffy_sendto(sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *) &from, sizeof(struct sockaddr));
+    }
   }
 }
 
@@ -95,6 +101,7 @@ void process_get(char *chunkfile, char *outputfile) {
   data_packet_list_t *head;
   for( head = whohas_list; head != NULL; head = head->next){
     data_packet_t *packet = head->packet;
+    broadcast(packet, &config);
     /* TODO: call spiffy_sendto() to flood this WHOHAS packet*/
   }
 }
@@ -114,7 +121,6 @@ void handle_user_input(char *line, void *cbdata) {
 
 
 void peer_run(bt_config_t *config) {
-  int sock;
   struct sockaddr_in myaddr;
   fd_set readfds;
   struct user_iobuf *userbuf;
@@ -159,5 +165,25 @@ void peer_run(bt_config_t *config) {
       }
     }
   }
+}
+
+/* Broadcast WHOHAS request to all node except myself */
+void broadcast(data_packet_t *packet, bt_config_t *config){
+    bt_peer_t *node;
+    short my_id = config->identity;
+
+    node = config->peers;
+    while(node!=NULL){
+        // Don't send request to itself
+        if(node->id == my_id){
+            node = node->next;
+            continue;
+        }   
+        // Send request
+        spiffy_sendto(sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *) &node->addr, sizeof(struct sockaddr));
+        // Iterate to next node
+        node = node->next;
+    }         
+    return;
 }
 

@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "bt_parse.h"
+#include "chunk.h"
+#include <netinet/in.h>
 
 
 /*
@@ -38,22 +40,23 @@ int read_chunkfile(char * chunkfile, char *data){
   		/* the max size of this line should less then 40 */
   		if( strlen( line ) > 40 )
   			return -1;
-  		int i;
-  		for(i = 0;i < 40;i += 2){
-  			data[count + i / 2] = line[i] << 4 | line[i + 1];
-  		}
+  		hex2binary((char*)line, 40, (uint8_t *)(data + count));
   		count += 20;
   		memset(line, 0, 40);
 
   	}
   	data[count] = '\0';
+  	fclose(fp);
 	return count;  	
 }
 data_packet_t *init_packet(char type, char *data){
-	printf("init_packet()\n");
+	printf("init_packet() type = %c\ndata = %s\n", type, data);
 	/* if data length larger than 100, return a null pointer */
 	unsigned int data_length;
-	if( (data_length = strlen(data)) > 100){
+	if( data == NULL){
+		data_length = 0;
+	}
+	else if( (data_length = strlen(data)) > 100){
 		return NULL;
 	}
 
@@ -66,17 +69,15 @@ data_packet_t *init_packet(char type, char *data){
 	packet->header.header_len = 16;
 	packet->header.packet_len = data_length + 16;
 
+
 	/* if type == WHOHAS || IHAVE , ignore the seq_num and ack_num */
-	if( type == '0' || type == '1'){
-	}
-	else{
-		// else write the two fields
-	}
+	/* !! notice that I will not fill seq and ack here in this function but in the flow_control.c*/
+	
 
 	/* write the data */
 
 	/* if type == WHOHAS || IHAVE , write the count of hashes and do the padding */
-	if( type == '0' || type == '1'){
+	if( type == 0 || type == 1){
 		char padding[4];
 		padding[0] = data_length / 20;
 		padding[1] = padding[2] = padding[3] = 1;
@@ -84,11 +85,18 @@ data_packet_t *init_packet(char type, char *data){
 		memcpy( &packet->data[4], data, strlen(data));
 	
 		packet->header.packet_len += 4;
+
 	}
 	else{
 		// write datafield for other packet type
-	}
+		memcpy(packet->data, data, strlen(data));
 
+	}
+	packet->header.magicnum = htons(packet->header.magicnum);
+    packet->header.header_len = htons(packet->header.header_len);
+    packet->header.packet_len = htons(packet->header.packet_len);
+    packet->header.seq_num = htonl(packet->header.seq_num);
+    packet->header.ack_num = htonl(packet->header.ack_num);
 	return packet;
 }
 
@@ -117,17 +125,63 @@ int find_in_local_has(char *hash, char *local){
 	return 0;
 }
 
+char* get_data_from_hash(char *hash , bt_config_t* config){
+	char data[512 * 1024];
+	char temp[40];
+	int index;
+	char *master_file = config->chunk_file;
+	FILE *fp = fopen(master_file, "r");
+	if( fp == NULL ){
+		printf("Can not locate file %s\n", hash);
+		return ;
+	}
+	char content_path[512];
+	fscanf(fp, "%s %s\n", temp, content_path);
+	fscanf(fp, "%s\n", temp);
+	int find = -1;
+	while( find != 1 && fscanf(fp,"%d %s",&index, temp ) > 0){
+		char local[20];
+		int i;
+		for( i = 0; i < 40;i += 2){
+			local[i / 2] = temp[i] << 4 | temp[i + 1];
+		}
+		int cmp = 1;
+		for( i = 0;i < 20;i ++){
+			if( local[i] != hash[i] ){
+				cmp = 0;
+				break;
+			}
+		}
 
-data_packet_t *handle_packet(data_packet_t *packet, bt_config_t* config){
-	if(packet->header.packet_type == '0'){
+		if( cmp == 1){
+			printf("find local content for has = %s\n", local);
+			find = 1;
+		}
+
+		memset(temp, 0, 40);
+		memset(local, 0 ,20);
+	}
+	printf("in Master file offset = %d\n", index);
+	FILE *content = fopen(content_path, "r");
+	fseek(content, 512 * 1024 * index, SEEK_SET );
+	fread(data,512 * 1024, 1, content);
+
+	fclose(content);
+	fclose(fp);
+	return content;
+}
+
+data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config){
+	printf("handle_packet() type == %c\n", packet->header.packet_type);
+	if(packet->header.packet_type == 0){
 		/* if incoming packet is a WHOHAS packet */
 		/* scan the packet datafiled to fetch the hashes and get the count */
 		int count = packet->data[0];
 
 		int i;
 		char local_has[100];
-		char data[100];
-		memset(data, 0 ,100);
+		char data[1500];
+		memset(data, 0 ,1500);
 		int reply_count = 0;
 
 		char * chunkfile = config->has_chunk_file;
@@ -135,6 +189,7 @@ data_packet_t *handle_packet(data_packet_t *packet, bt_config_t* config){
 			printf("Can not locate local chunkfile = %s\n", chunkfile);
 			return NULL;
 		}
+		int find = -1;
 
 		for(i = 0;i < count; i ++){
 			int hash_start = 4 + 20 * i;
@@ -147,16 +202,74 @@ data_packet_t *handle_packet(data_packet_t *packet, bt_config_t* config){
 			}
 			if( 1 == find_in_local_has(request_chunk, local_has) ){
 				printf("find a valid local hash [%s]\n", request_chunk);
-				strcat(data, request_chunk);
+				find = 1;
+				for( j = 0;j < 20;j ++){
+					data[reply_count + j] = request_chunk[j];
+				}
 				reply_count += 20;
 			}
 		}
 		data[reply_count] = '\0';
-		return init_packet('1', data);
 
+		if( find == -1){
+			return NULL;
+		}
+		else{
+			data_packet_list_t *ret = (data_packet_list_t *)malloc(sizeof(data_packet_list_t));
+			ret->packet = init_packet(1, data);
+			ret->next = NULL;
+			return ret;
+		}
+
+	}
+	else if( packet->header.packet_type == 1 ){
+		/* if the incoming packet is an IHAVE packet */
+		/* here one qustions are what if mutiple nodes declare he has the requested chunk */
+		data_packet_list_t *ret = NULL;
+		int count = packet->data[0];
+		int i;
+		for(i = 0;i < count; i ++){
+		/* for each hash value generate a GET packet */
+		/* each GET packet will only contain ONE hash value*/
+			char data[21];
+			memset(data, 0 , 21);
+			int j;
+			for(j = 0;j < 20;j ++ ){
+				data[j] = packet->data[4 + 20 * i + j];
+			}
+			//memcpy( data, &packet->data[4 + 20 * i], 20);
+			data[20] = '\0';
+			if ( ret == NULL ){
+				ret = (data_packet_list_t *)malloc( sizeof(data_packet_list_t));
+  				ret->packet = init_packet(2,  data);
+  				ret->next = NULL;
+			}
+			else{
+				data_packet_t *packet = init_packet(2,  data);
+				data_packet_list_t *new_block = (data_packet_list_t *)malloc( sizeof(data_packet_list_t));
+				new_block->packet = packet;
+				new_block->next = ret;
+				ret = new_block;
+			}
+			memset(data, 0 , 20);
+		}
+		return ret;
+	}
+	else if( packet->header.packet_type == 2 ){
+		/* if the incoming packet is an GET packet */
+		/* start transmit of the data */
+		char hash[21];
+		memcpy(hash, packet->data, 20);
+		hash[20] = '\0';
+
+		char *data = get_data_from_hash(hash, config);
+		/* pass this data to flow control machine */
+		data = NULL;
+		return NULL;
 	}
 	else{
 		/* TODO(for next checkpoint) : if incoming packet is other packets*/
+
 	}
 	return NULL;
 }
@@ -176,19 +289,18 @@ data_packet_list_t *generate_WHOHAS(char *chunkfile){
   	int count = 0;
   	while( fscanf(fp, "%d %s\n", &index, line)  > 0 ){
   		/* the max size of this line should less then 40 */
-  		if( strlen( line ) > 40 )
+  		if( strlen( line ) > 40 ){
+  			fclose(fp);
   			return NULL;
-  		int i;
-  		for(i = 0;i < 40;i += 2){
-  			data[count + i / 2] = line[i] << 4 | line[i + 1];
   		}
+  		hex2binary((char*)line, 40, (uint8_t *)(data + count));
   		count += 20;
   	
   		memset(line, 0, 40);
 
   		if( count >= 1000 ){
   			data[count] = '\0';
-  			data_packet_t *packet = init_packet('0',  data);
+  			data_packet_t *packet = init_packet(0,  data);
   			if ( ret == NULL ){
   				ret = (data_packet_list_t *)malloc( sizeof(data_packet_list_t));
   				ret->packet = packet;
@@ -206,7 +318,7 @@ data_packet_list_t *generate_WHOHAS(char *chunkfile){
   	}
 
   	data[count] = '\0';
-  	data_packet_t *packet = init_packet('0',  data);
+  	data_packet_t *packet = init_packet(0,  data);
   	if ( ret == NULL ){
   		ret = (data_packet_list_t *)malloc( sizeof(data_packet_list_t));
   		ret->packet = packet;
@@ -218,6 +330,7 @@ data_packet_list_t *generate_WHOHAS(char *chunkfile){
   		new_block->next = ret;
   		ret = new_block;
   	}
+  	fclose(fp);
   	return ret;
 }
 
