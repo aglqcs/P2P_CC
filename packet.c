@@ -27,6 +27,13 @@ typedef struct data_packet {
 */
 
 int read_chunkfile(char * chunkfile, char *data){
+/* An example chunk file is:
+0 b129b015e8a4258dc8c0d0b3a63acaeda8d14cd8
+1 8085b28ac91f81435f9108388a3a4c8d9b01e84a
+*/
+/* 	This read a chunkfile, convert the string hashvalue into binary value, and write into
+	"data" parameter, return the size of the "data" parameter
+*/
 	FILE *fp = fopen( chunkfile, "r");
   	if( fp == NULL ){
     	printf("%s can not be found\n", chunkfile);
@@ -50,6 +57,9 @@ int read_chunkfile(char * chunkfile, char *data){
 	return count;  	
 }
 data_packet_t *init_packet(char type, char *data){
+/*	This function write the packet header and data and return a packet object
+	notice that here I DO NOT write the seq and ack of the header
+*/
 	printf("init_packet() type = %c\ndata = %s\n", type, data);
 	/* if data length larger than 100, return a null pointer */
 	unsigned int data_length;
@@ -101,11 +111,16 @@ data_packet_t *init_packet(char type, char *data){
 }
 
 data_packet_t *build_packet_from_buf(char *buf){
+	/* 	Normally after a recv() from network, this function will be called to convert a char
+		buff into a data_packet_t object
+	*/
 	/* in theory this should be correct but if not correct we can modify this */
 	return (data_packet_t *)(buf);
 }
 
 int find_in_local_has(char *hash, char *local){
+	/*	search local hash file to find if there is a hash record that matches input
+	*/
 	int local_has_size = strlen(local) / 20;
 
 	int i;
@@ -126,6 +141,11 @@ int find_in_local_has(char *hash, char *local){
 }
 
 char* get_data_from_hash(char *hash , bt_config_t* config){
+	/*	read the master data file and return the 512KB data for a chunk
+		Two steps:
+			(1) calculate the offset in the master chunk file based on hashvalue
+			(2)	read the data form master data file based on the offset
+	*/
 	char data[512 * 1024];
 	char temp[40];
 	int index;
@@ -133,7 +153,7 @@ char* get_data_from_hash(char *hash , bt_config_t* config){
 	FILE *fp = fopen(master_file, "r");
 	if( fp == NULL ){
 		printf("Can not locate file %s\n", hash);
-		return ;
+		return NULL;
 	}
 	char content_path[512];
 	fscanf(fp, "%s %s\n", temp, content_path);
@@ -141,11 +161,13 @@ char* get_data_from_hash(char *hash , bt_config_t* config){
 	int find = -1;
 	while( find != 1 && fscanf(fp,"%d %s",&index, temp ) > 0){
 		char local[20];
-		int i;
-		for( i = 0; i < 40;i += 2){
-			local[i / 2] = temp[i] << 4 | temp[i + 1];
-		}
+
+		/* calculate the binary hash from the master chunk file */
+		hex2binary((char*)temp, 40, (uint8_t *)(local));
+
 		int cmp = 1;
+		int i;
+		/* and compare if there is a match of hash values */
 		for( i = 0;i < 20;i ++){
 			if( local[i] != hash[i] ){
 				cmp = 0;
@@ -172,6 +194,9 @@ char* get_data_from_hash(char *hash , bt_config_t* config){
 }
 
 data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config){
+	/*	read a incoming packet, 
+		return a list of response packets
+	*/
 	printf("handle_packet() type == %c\n", packet->header.packet_type);
 	if(packet->header.packet_type == 0){
 		/* if incoming packet is a WHOHAS packet */
@@ -231,13 +256,14 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config){
 		for(i = 0;i < count; i ++){
 		/* for each hash value generate a GET packet */
 		/* each GET packet will only contain ONE hash value*/
+		/* TODO(cp2): add a data structrue to record which node has this chunk */
 			char data[21];
 			memset(data, 0 , 21);
 			int j;
 			for(j = 0;j < 20;j ++ ){
 				data[j] = packet->data[4 + 20 * i + j];
 			}
-			//memcpy( data, &packet->data[4 + 20 * i], 20);
+
 			data[20] = '\0';
 			if ( ret == NULL ){
 				ret = (data_packet_list_t *)malloc( sizeof(data_packet_list_t));
@@ -264,7 +290,7 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config){
 
 		char *data = get_data_from_hash(hash, config);
 		/* pass this data to flow control machine */
-		data = NULL;
+		printf("Fetch data from file = %s\n", data);
 		return NULL;
 	}
 	else{
@@ -275,6 +301,9 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config){
 }
 
 data_packet_list_t *generate_WHOHAS(char *chunkfile){
+	/*
+		this function returns a list of WHOHAS packets when user type GET command
+	*/
   	data_packet_list_t *ret = NULL;
 
   	char data[1200];
