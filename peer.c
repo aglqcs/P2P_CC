@@ -57,7 +57,6 @@ void process_inbound_udp(int sock) {
   struct sockaddr_in from;
   socklen_t fromlen;
   char buf[BUFLEN];
-  int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
 
   fromlen = sizeof(from);
   spiffy_recvfrom(sock, buf, BUFLEN, 0, (struct sockaddr *) &from, &fromlen);
@@ -157,7 +156,6 @@ void peer_run(bt_config_t *config) {
     
     if (nfds > 0) {
       if (FD_ISSET(sock, &readfds)) {
-        printf("FD_ISSET socket from readfd\n");
 	    process_inbound_udp(sock);
       }
       
@@ -185,7 +183,7 @@ void broadcast(data_packet_t *packet, bt_config_t *config){
         spiffy_sendto(sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *) &node->addr, sizeof(struct sockaddr));
         // Iterate to next node
         node = node->next;
-    }          
+    }         
     return;
 }
 

@@ -52,7 +52,7 @@ int read_chunkfile(char * chunkfile, char *data){
   		/* the max size of this line should less then 40 */
         if( strlen( line ) > 40 )
   			return -1;
-  		hex2binary((char*)line, 40, (uint8_t *)(data + count));
+        hex2binary((char*)line, 40, (uint8_t *)(data + count));
   		count += 20;
   		memset(line, 0, 40);
 
@@ -78,9 +78,9 @@ data_packet_t *init_packet(char type, char *data){
 	data_packet_t *packet = (data_packet_t *) malloc( sizeof(data_packet_t));
 	memset( packet, 0, sizeof(data_packet_t));
 	packet->header.magicnum = 15441;
-	packet->header.version = 1;
-	packet->header.packet_type = type;
-	packet->header.header_len = 16;
+    packet->header.version = 1;
+    packet->header.packet_type = type;
+    packet->header.header_len = 16;
 	packet->header.packet_len = data_length + 16;
 
 
@@ -107,7 +107,7 @@ data_packet_t *init_packet(char type, char *data){
 			memcpy(packet->data, data, strlen(data));
 
 	}
-	packet->header.magicnum = htons(packet->header.magicnum);
+    packet->header.magicnum = htons(packet->header.magicnum);
     packet->header.header_len = htons(packet->header.header_len);
     packet->header.packet_len = htons(packet->header.packet_len);
     packet->header.seq_num = htonl(packet->header.seq_num);
@@ -240,7 +240,6 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 			}
 		}
 		data[reply_count] = '\0';
-
 		if( find == -1){
 			return NULL;
 		}
