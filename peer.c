@@ -71,26 +71,39 @@ void process_inbound_udp(int sock) {
   data_packet_t *packet = build_packet_from_buf(buf);
  
   /* next parse this packet and build the response packet*/
-  data_packet_t *response = handle_packet(packet, &config);
+  data_packet_list_t *response_list = handle_packet(packet, &config);
 
   /* finally call spiffy_sendto() to send back the packet*/
-  if(response != NULL && response->header.packet_type == 1){
-    spiffy_sendto(sock, response, sizeof(data_packet_t), 0, (struct sockaddr *) &from, sizeof(struct sockaddr));
+  if( NULL == response_list ){
+    /* can not generate a response or no data avaiable */
+    return;
+  }
+  else{
+    data_packet_list_t *head;
+    for( head = response_list; head != NULL; head = head->next ){
+      data_packet_t *packet = head->packet;
+      /* TODO: send back this packet */
+      spiffy_sendto(sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *) &from, sizeof(struct sockaddr));
+    }
   }
 }
 
 void process_get(char *chunkfile, char *outputfile) {
   /* Here open the chunkfile, and write data based on the content of chunkfile*/
   /* notice that here I hard code the length of data to 100, is this enough ?*/ 
-  char data[100];
-  int count;
-  if( (count = read_chunkfile(chunkfile, data)) < 0){
+
+  data_packet_list_t *whohas_list = generate_WHOHAS(chunkfile);
+
+  if( NULL == whohas_list){
+    printf("can not generate a packet\n");
     return;
   }
-  /* build the WHOHAS packet   WHOHAS = '0'*/
-  data_packet_t *packet = init_packet(0,  data);
-  /* call spiffy_sendto() to flood the WHOHAS packet */
-  broadcast(packet, &config);
+  data_packet_list_t *head;
+  for( head = whohas_list; head != NULL; head = head->next){
+    data_packet_t *packet = head->packet;
+    broadcast(packet, &config);
+    /* TODO: call spiffy_sendto() to flood this WHOHAS packet*/
+  }
 }
 
 void handle_user_input(char *line, void *cbdata) {
@@ -108,7 +121,6 @@ void handle_user_input(char *line, void *cbdata) {
 
 
 void peer_run(bt_config_t *config) {
-  // int sock;
   struct sockaddr_in myaddr;
   fd_set readfds;
   struct user_iobuf *userbuf;
