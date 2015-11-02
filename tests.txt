@@ -1,0 +1,2 @@
+For testing, we build a node.map with 5 different peers and try to send and broadcast to each node with WHOHAS and the node with file will send back IHAVE.
+We also test the scenario where the file doesn't exist or the node doesn't have the particular chunk.
