@@ -190,7 +190,7 @@ char* get_data_from_hash(char *hash , bt_config_t* config){
 
 	fclose(content);
 	fclose(fp);
-	return content;
+	return data;
 }
 
 data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config){
