@@ -52,8 +52,8 @@ int read_chunkfile(char * chunkfile, char *data){
 
   	}
   	data[count] = '\0';
-  	fclose(fp);
-	return count;  	
+    fclose(fp);
+    return count;  	
 }
 data_packet_t *init_packet(char type, char *data){
 /*	This function write the packet header and data and return a packet object
@@ -71,12 +71,12 @@ data_packet_t *init_packet(char type, char *data){
 
 	data_packet_t *packet = (data_packet_t *) malloc( sizeof(data_packet_t));
 	memset( packet, 0, sizeof(data_packet_t));
+
 	packet->header.magicnum = 15441;
     packet->header.version = 1;
     packet->header.packet_type = type;
     packet->header.header_len = 16;
 	packet->header.packet_len = data_length + 16;
-
 
 	/* if type == WHOHAS || IHAVE , ignore the seq_num and ack_num */
 	/* !! notice that I will not fill seq and ack here in this function but in the flow_control.c*/
@@ -97,8 +97,7 @@ data_packet_t *init_packet(char type, char *data){
 	}
 	else{
 		// write datafield for other packet type
-		memcpy(packet->data, data, strlen(data));
-
+        memcpy(packet->data, data, strlen(data));
 	}
     packet->header.magicnum = htons(packet->header.magicnum);
     packet->header.header_len = htons(packet->header.header_len);
@@ -206,7 +205,7 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, st
 		char data[1500];
 		memset(data, 0 ,1500);
 		int reply_count = 0;
-
+        int find = 0;
 		char * chunkfile = config->has_chunk_file;
 		if ( read_chunkfile(chunkfile, local_has) < 0 ){
 			printf("Can not locate local chunkfile = %s\n", chunkfile);
