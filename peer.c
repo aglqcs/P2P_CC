@@ -26,6 +26,8 @@ void peer_run(bt_config_t *config);
 void broadcast(data_packet_t *packet, bt_config_t *config);
 bt_config_t config;
 int sock;
+/* Chunk owner list Declair, type define at packet.h */
+chunk_owner_list_t* c_list = NULL;
 
 int main(int argc, char **argv) {
 
@@ -71,7 +73,8 @@ void process_inbound_udp(int sock) {
   data_packet_t *packet = build_packet_from_buf(buf);
  
   /* next parse this packet and build the response packet*/
-  data_packet_list_t *response_list = handle_packet(packet, &config);
+  /* NEW: add parameter socket address from the one who send the packet */
+  data_packet_list_t *response_list = handle_packet(packet, &config, &from, c_list);
 
   /* finally call spiffy_sendto() to send back the packet*/
   if( NULL == response_list ){
@@ -82,7 +85,7 @@ void process_inbound_udp(int sock) {
     data_packet_list_t *head;
     for( head = response_list; head != NULL; head = head->next ){
       data_packet_t *packet = head->packet;
-      /* TODO: send back this packet */
+      /* send back this packet */
       spiffy_sendto(sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *) &from, sizeof(struct sockaddr));
     }
   }
@@ -92,17 +95,19 @@ void process_get(char *chunkfile, char *outputfile) {
   /* Here open the chunkfile, and write data based on the content of chunkfile*/
   /* notice that here I hard code the length of data to 100, is this enough ?*/ 
 
-  data_packet_list_t *whohas_list = generate_WHOHAS(chunkfile);
+  /* NEW: Initiallize the chunk_owner_list */
+  data_packet_list_t *whohas_list = generate_WHOHAS(chunkfile, c_list);
 
   if( NULL == whohas_list){
     printf("can not generate a packet\n");
     return;
   }
+
   data_packet_list_t *head;
+
   for( head = whohas_list; head != NULL; head = head->next){
     data_packet_t *packet = head->packet;
     broadcast(packet, &config);
-    /* TODO: call spiffy_sendto() to flood this WHOHAS packet*/
   }
 }
 
@@ -160,7 +165,7 @@ void peer_run(bt_config_t *config) {
       }
       
       if (FD_ISSET(STDIN_FILENO, &readfds)) {
-	process_user_input(STDIN_FILENO, userbuf, handle_user_input,
+	    process_user_input(STDIN_FILENO, userbuf, handle_user_input,
 			   "Currently unused");
       }
     }
