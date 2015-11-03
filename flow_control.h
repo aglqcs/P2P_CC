@@ -20,7 +20,9 @@ typedef struct data{
   int end;
 } data_t;  
 
+
 typedef struct data_list{
 	data_t *data;
 	struct data_list *next;
 } data_list_t;
+

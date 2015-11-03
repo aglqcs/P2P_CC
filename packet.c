@@ -5,6 +5,10 @@
 #include "bt_parse.h"
 #include "chunk.h"
 #include <netinet/in.h>
+#include "flow_control.h"
+
+extern data_packet_list_t* send_data(char *hash);
+extern void init_datalist(char *hash, char *content);
 
 
 /*
@@ -146,7 +150,7 @@ char* get_data_from_hash(char *hash , bt_config_t* config){
 			(1) calculate the offset in the master chunk file based on hashvalue
 			(2)	read the data form master data file based on the offset
 	*/
-	char data[512 * 1024];
+	char *data = malloc(512 * 1024);
 	char temp[40];
 	int index;
 	char *master_file = config->chunk_file;
@@ -289,9 +293,13 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config){
 		hash[20] = '\0';
 
 		char *data = get_data_from_hash(hash, config);
-		/* pass this data to flow control machine */
+		
+		/* init the flow control machine for sending back the data */
+		init_datalist(hash,data);
+		/* and call the first send */
 		printf("Fetch data from file = %s\n", data);
-		return NULL;
+
+		return send_data(hash);
 	}
 	else{
 		/* TODO(for next checkpoint) : if incoming packet is other packets*/

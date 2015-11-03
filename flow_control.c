@@ -12,8 +12,8 @@ void init_datalist(char *hash, char *content){
 	/* this function receive the data from packet.c(from master data file) and separate them into chunks */
 	data_list_t *new_element = (data_list_t *)malloc(sizeof(data_list_t));
 	new_element->data->hash = hash;
-	new_element->data->content = content;
-	
+	new_element->data->send_window = 1;	
+
 	/* init the congestion control variable */
 	new_element->data->send_window = 1;
 	new_element->data->ssthresh = 8;
@@ -62,11 +62,13 @@ data_t* get_data_by_hash(char *hash){
 	return NULL;
 }
 
-void send_data(char *hash){
+data_packet_list_t* send_data(char *hash){
 	data_t *to_send = get_data_by_hash(hash);
+
+	data_packet_list_t* ret = NULL;
 	if( to_send == NULL ){
 		printf("in send_data(), can not locate data_t for hash [%s]\n", hash);
-		return;
+		return NULL;
 	}
 
 	/* calculate the diff(current window size) for this data */
@@ -84,17 +86,34 @@ void send_data(char *hash){
 			/* notice that I do not change to the network bit sequence */
 			packet->header.seq_num = to_send->end;
 			to_send->state[to_send->end] = UNACKED;
-			/* call spiffy_send() to send this data */
+
+			/* add the packet to the list */
+			if ( ret == NULL ){
+  				ret = (data_packet_list_t *)malloc( sizeof(data_packet_list_t));
+  				ret->packet = packet;
+  				ret->next = NULL;
+  			}
+  			else{
+ 				data_packet_list_t *new_block = (data_packet_list_t *)malloc( sizeof(data_packet_list_t));
+  				new_block->packet = packet;
+  				new_block->next = ret;
+  				ret = new_block;
+  			}
 		}
 	}
+	return ret;
 }
 
-void handle_ack(char *hash , int ack_number){
+data_packet_list_t* handle_ack(char *hash , int ack_number){
 	data_t *to_send = get_data_by_hash(hash);
 	if( to_send == NULL ){
 		printf("in handle_ack(), can not locate data_t for hash [%s]\n", hash);
-		return;
+		return NULL;
 	}
 	to_send->state[ack_number] = ACKED;
 	to_send->start = ack_number;
+
+	/* Since the window size changed, we have a possibility to send more data, so call send_data() here */
+	return send_data(hash);
 }
+
