@@ -198,7 +198,7 @@ char* get_data_from_hash(char *hash , bt_config_t* config){
 	return data;
 }
 
-data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, int sockfd){
+data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, struct sockaddr_in* addr, chunk_owner_list_t* c_list){
 	/*	read a incoming packet, 
 		return a list of response packets
 	*/
@@ -213,7 +213,7 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 		char data[1500];
 		memset(data, 0 ,1500);
 		int reply_count = 0;
-        int find = 0;
+
 		char * chunkfile = config->has_chunk_file;
 		if ( read_chunkfile(chunkfile, local_has) < 0 ){
 			printf("Can not locate local chunkfile = %s\n", chunkfile);
@@ -240,7 +240,8 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 			}
 		}
 		data[reply_count] = '\0';
-		if( find == -1){
+		
+        if( find == -1){
 			return NULL;
 		}
 		else{
@@ -268,11 +269,13 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 				data[j] = packet->data[4 + 20 * i + j];
 			}
 
-			/*	add node selection here
-			*/
-
 			// init the recv list
 			init_recv_buffer(sockfd);
+            // Update the chunk owner list
+            if(add_to_chunk_owner_list(addr, c_list, data) == -1){
+                printf("Error: can't add peer to chunk_owner_list\n");
+                return NULL;
+            }
 
 			data[20] = '\0';
 			if ( ret == NULL ){
@@ -333,7 +336,7 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 	return NULL;
 }
 
-data_packet_list_t *generate_WHOHAS(char *chunkfile){
+data_packet_list_t *generate_WHOHAS(char *chunkfile, chunk_owner_list_t* c_list){
 	/*
 		this function returns a list of WHOHAS packets when user type GET command
 	*/
@@ -356,6 +359,10 @@ data_packet_list_t *generate_WHOHAS(char *chunkfile){
   			return NULL;
   		}
   		hex2binary((char*)line, 40, (uint8_t *)(data + count));
+        
+        /* Create and initiallize a owner_list for the chunk */
+        init_chunk_owner_list(c_list, (data+count));
+
   		count += 20;
   	
   		memset(line, 0, 40);
@@ -394,5 +401,68 @@ data_packet_list_t *generate_WHOHAS(char *chunkfile){
   	}
   	fclose(fp);
   	return ret;
+}
+
+/*
+ * Below is for chunk operation
+ */
+
+void init_chunk_owner_list(chunk_owner_list_t* list, char* data){
+    if(list == NULL){
+        list = (chunk_owner_list_t*)malloc(sizeof(chunk_owner_list_t));
+        memcpy(list->chunk_hash, data, 20);
+        list->highest_idx = -1;
+        list->chosen_node_idx = -1;
+        list->next = NULL;
+    }
+    else{
+        chunk_owner_list_t* new_list = (chunk_owner_list_t*)malloc(sizeof(chunk_owner_list_t));
+        memcpy(new_list->chunk_hash, data, 20);
+        new_list->highest_idx = -1;
+        new_list->chosen_node_idx = -1;
+        new_list->next = list;
+        list = new_list;
+    }    
+}
+
+chunk_owner_list_t* search_chunk(chunk_owner_list_t* c_list, char* data){
+    while(c_list!=NULL){
+        if(strncmp(c_list->chunk_hash, data, 20) == 0)
+            return c_list;
+        c_list = c_list->next;
+    }
+    // Return NULL if not found
+    return NULL;
+}
+
+int add_to_chunk_owner_list(struct sockaddr_in *addr, chunk_owner_list_t* c_list, char* data){
+    chunk_owner_list_t* dest_node;
+    struct sockaddr_in* new_addr;
+
+    // Search for the right chunk
+    if((dest_node=search_chunk(c_list, data)) == NULL)
+        return -1;
+    // add the addr to the list
+    dest_node->highest_idx += 1;
+    if(dest_node->highest_idx > 127){
+        printf("Node list cannot be more than 128\n");
+        return -1;
+    }
+    new_addr = (struct sockaddr_in*)malloc(sizeof(struct sockaddr_in));
+    dest_node->list[dest_node->highest_idx] = new_addr;
+    return 0;
+}
+
+struct sockaddr_in* get_chunk_owner(char* data, chunk_owner_list_t* c_list){
+    chunk_owner_list_t* dest_node;
+    if((dest_node=search_chunk(c_list, data)) == NULL)
+        return NULL;
+    if(dest_node->highest_idx == -1)
+        return NULL;
+    dest_node->chosen_node_idx += 1;
+    // Check if the chosen_node_idx is larger than highest_idx
+    if(dest_node->chosen_node_idx > dest_node->highest_idx)
+        dest_node->chosen_node_idx = 0;
+    return dest_node->list[dest_node->chosen_node_idx];
 }
 
