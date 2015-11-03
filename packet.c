@@ -266,15 +266,23 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, st
                 printf("Error: can't add peer to chunk_owner_list\n");
                 return NULL;
             }
-
 			data[20] = '\0';
+
+            data_packet_t *packet = init_packet(2, data);
+            
+            // Send packet if its the first peer having the chunk
+            if(c_list->highest_idx == 0){
+                struct sockaddr_in* o_addr = get_chunk_owner(data, c_list);
+                spiffy_sendto(sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *) &o_addr, sizeof(struct sockaddr));
+                continue;
+            }
+
 			if ( ret == NULL ){
 				ret = (data_packet_list_t *)malloc( sizeof(data_packet_list_t));
-  				ret->packet = init_packet(2,  data);
+  				ret->packet = packet;
   				ret->next = NULL;
 			}
 			else{
-				data_packet_t *packet = init_packet(2,  data);
 				data_packet_list_t *new_block = (data_packet_list_t *)malloc( sizeof(data_packet_list_t));
 				new_block->packet = packet;
 				new_block->next = ret;
