@@ -15,7 +15,7 @@ typedef struct header_s {
 
 typedef struct data_packet {
   header_t header;
-  char data[100];
+  char data[1200];
 } data_packet_t;
 
 typedef struct data_packet_list{
@@ -26,5 +26,5 @@ typedef struct data_packet_list{
 data_packet_t *init_packet(char type, char *data);
 int read_chunkfile(char * chunkfile, char *ret);
 data_packet_t *build_packet_from_buf(char *buf);
-data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config);
+data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, int sockfd);
 data_packet_list_t *generate_WHOHAS(char *chunkfile);

@@ -9,7 +9,8 @@
 
 extern data_packet_list_t* send_data(char *hash);
 extern void init_datalist(char *hash, char *content);
-
+extern data_packet_list_t* recv_data(data_packet_t *packet, int sockfd);
+extern void init_recv_buffer(int sockfd);
 
 /*
 for convenient show the structrue here
@@ -103,7 +104,8 @@ data_packet_t *init_packet(char type, char *data){
 	}
 	else{
 		// write datafield for other packet type
-		memcpy(packet->data, data, strlen(data));
+		if( data != NULL )
+			memcpy(packet->data, data, strlen(data));
 
 	}
 	packet->header.magicnum = htons(packet->header.magicnum);
@@ -197,7 +199,7 @@ char* get_data_from_hash(char *hash , bt_config_t* config){
 	return data;
 }
 
-data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config){
+data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, int sockfd){
 	/*	read a incoming packet, 
 		return a list of response packets
 	*/
@@ -268,6 +270,13 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config){
 				data[j] = packet->data[4 + 20 * i + j];
 			}
 
+			/*	add node selection here
+			*/
+
+			// init the recv list
+			init_recv_buffer(sockfd);
+
+
 			data[20] = '\0';
 			if ( ret == NULL ){
 				ret = (data_packet_list_t *)malloc( sizeof(data_packet_list_t));
@@ -298,8 +307,28 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config){
 		init_datalist(hash,data);
 		/* and call the first send */
 		printf("Fetch data from file = %s\n", data);
+		data_packet_list_t *ret = send_data(hash);
 
-		return send_data(hash);
+		return ret;
+	}
+	else if ( packet->header.packet_type == 3 ){
+		/* if the incoming packet is an DATA packet */
+		printf("recv a DATA packet\n");
+		data_packet_list_t *ret = recv_data(packet, sockfd);
+		
+		/* this datapacket may be the last packet, check if it is then write back to disk */
+		/*
+		int full = write_back(sockfd);
+		if( full == 1){
+			printf("successfully get the data chunk, writing back to disk\n");
+		}
+		*/
+		
+		return ret;
+	}
+	else if( packet->header.packet_type == 4){
+		/* if the incoming packet is an ACK packet */
+	//	data_packet_list_t *ret = handle_ack(char *hash , int ack_number)
 	}
 	else{
 		/* TODO(for next checkpoint) : if incoming packet is other packets*/
