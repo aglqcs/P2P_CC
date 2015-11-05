@@ -99,19 +99,22 @@ int read_chunkfile(char * chunkfile, char *data){
 	return count;  	
 }
 
-data_packet_t *init_packet(char type, char *data){
+data_packet_t *init_packet(char type, char *data, int length){
 /*	This function write the packet header and data and return a packet object
 	notice that here I DO NOT write the seq and ack of the header
 */
-	printf("init_packet() type = %c\ndata = %s\n", type, data);
-	/* if data length larger than 100, return a null pointer */
+	printf("init_packet() type = %c \n", type);
 	unsigned int data_length;
 	if( data == NULL){
 		data_length = 0;
 	}
+	else{
+		data_length = length;
+	}
+	/*
 	else if( (data_length = strlen(data)) > 100){
 		return NULL;
-	}
+	}*/
 
 	data_packet_t *packet = (data_packet_t *) malloc( sizeof(data_packet_t));
 	memset( packet, 0, sizeof(data_packet_t));
@@ -200,12 +203,15 @@ char* get_data_from_hash(char *hash , bt_config_t* config){
 		return NULL;
 	}
 	char content_path[512];
+	/* read the content path first */
 	fscanf(fp, "%s %s\n", temp, content_path);
 	fscanf(fp, "%s\n", temp);
+	memset(temp,0 , 40);
+
+	printf("DEBUG path = %s\n",content_path);
 	int find = -1;
 	while( find != 1 && fscanf(fp,"%d %s",&index, temp ) > 0){
 		char local[20];
-
 		/* calculate the binary hash from the master chunk file */
 		hex2binary((char*)temp, 40, (uint8_t *)(local));
 
@@ -231,9 +237,10 @@ char* get_data_from_hash(char *hash , bt_config_t* config){
 	FILE *content = fopen(content_path, "r");
 	fseek(content, 512 * 1024 * index, SEEK_SET );
 	fread(data,512 * 1024, 1, content);
-
 	fclose(content);
 	fclose(fp);
+		printf("\nDEBUG: the content length = %d %d\n", strlen(data), sizeof(data));
+
 	return data;
 }
 
@@ -242,6 +249,13 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 		return a list of response packets
 	*/
 	printf("handle_packet() type == %d \n", packet->header.packet_type);
+	  if( packet->header.packet_type == 3  ){
+        printf("DEBUG : RECV packet with type = DATA seq = %d\n", packet->header.seq_num);
+      }
+      if(packet->header.packet_type == 4){
+        printf("DEBUG : RECV packet with type = ACK ack = %d\n", packet->header.ack_num);
+      }
+
 	if(packet->header.packet_type == 0){
 		/* if incoming packet is a WHOHAS packet */
 		/* scan the packet datafiled to fetch the hashes and get the count */
@@ -285,7 +299,7 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 		}
 		else{
 			data_packet_list_t *ret = (data_packet_list_t *)malloc(sizeof(data_packet_list_t));
-			ret->packet = init_packet(1, data);
+			ret->packet = init_packet(1, data, reply_count);
 			ret->next = NULL;
 			return ret;
 		}
@@ -313,16 +327,16 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 
 			// after decide the node that I will be talking to, init the recv list
 			// if decide to use this node {
-			init_recv_buffer(sockfd, &data);
+			init_recv_buffer(sockfd, data);
 
 			data[20] = '\0';
 			if ( ret == NULL ){
 				ret = (data_packet_list_t *)malloc( sizeof(data_packet_list_t));
-  				ret->packet = init_packet(2,  data);
+  				ret->packet = init_packet(2,  data, 20);
   				ret->next = NULL;
 			}
 			else{
-				data_packet_t *packet = init_packet(2,  data);
+				data_packet_t *packet = init_packet(2,  data, 20);
 				data_packet_list_t *new_block = (data_packet_list_t *)malloc( sizeof(data_packet_list_t));
 				new_block->packet = packet;
 				new_block->next = ret;
@@ -354,7 +368,6 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 	}
 	else if ( packet->header.packet_type == 3 ){
 		/* if the incoming packet is an DATA packet */
-		printf("recv a DATA packet\n");
 		data_packet_list_t *ret = recv_data(packet, sockfd);
 		
 		/* this datapacket may be the last packet, check if it is then write back to disk */
@@ -374,6 +387,7 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 	}
 	else{
 		/* TODO(for next checkpoint) : if incoming packet is other packets*/
+		printf("ERROR: INVALID PACKET TYPE = %d\n", packet->header.packet_type);
 
 	}
 	return NULL;
@@ -408,7 +422,7 @@ data_packet_list_t *generate_WHOHAS(char *chunkfile){
   		}
   		hex2binary((char*)line, 40, (uint8_t *)(data + count));
 
-  		printf("hash = %s\n", data + count);
+  		printf("DEBUG hash = %s\n", data + count);
   		count += 20;
   	
   		memset(line, 0, 40);
@@ -417,7 +431,7 @@ data_packet_list_t *generate_WHOHAS(char *chunkfile){
 
   		if( count >= 1000 ){
   			data[count] = '\0';
-  			data_packet_t *packet = init_packet(0,  data);
+  			data_packet_t *packet = init_packet(0,  data, count);
   			if ( ret == NULL ){
   				ret = (data_packet_list_t *)malloc( sizeof(data_packet_list_t));
   				ret->packet = packet;
@@ -441,11 +455,13 @@ data_packet_list_t *generate_WHOHAS(char *chunkfile){
   		char temp[20];
   		hex2binary((char*)line, 40, (uint8_t *)(temp));
 		file_manager.hash_set[file_manager.top] = temp;
+		printf("DEBUG: init file_manager with i = %d hash = %s\n", file_manager.top, file_manager.hash_set[file_manager.top]);
+
 		file_manager.top++;
   	}
 
   	data[count] = '\0';
-  	data_packet_t *packet = init_packet(0,  data);
+  	data_packet_t *packet = init_packet(0,  data, count);
   	if ( ret == NULL ){
   		ret = (data_packet_list_t *)malloc( sizeof(data_packet_list_t));
   		ret->packet = packet;
@@ -459,6 +475,7 @@ data_packet_list_t *generate_WHOHAS(char *chunkfile){
   	}
   	fclose(fp);
   	fclose(fp2);
+  	printf("DEBUG generate_WHOHAS OVER\n");
   	return ret;
 }
 

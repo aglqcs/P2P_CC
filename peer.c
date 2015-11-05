@@ -27,6 +27,27 @@ bt_config_t config;
 int sock;
 
 
+/* Broadcast WHOHAS request to all node except myself */
+void broadcast(data_packet_t *packet, bt_config_t *config){
+    bt_peer_t *node;
+    short my_id = config->identity;
+
+    node = config->peers;
+    while(node!=NULL){
+        // Don't send request to itself
+        if(node->id == my_id){
+            node = node->next;
+            continue;
+        }   
+        // Send request
+        spiffy_sendto(sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *) &node->addr, sizeof(struct sockaddr));
+        // Iterate to next node
+        node = node->next;
+    }         
+    return;
+}
+
+
 int main(int argc, char **argv) {
 
   bt_init(&config, argc, argv);
@@ -67,7 +88,6 @@ void process_inbound_udp(int sock) {
 	 ntohs(from.sin_port),
 	 buf);
 */
-  printf("DEBUG inbound udp\n");
   /* first generate the incoming packet */
   data_packet_t *packet = build_packet_from_buf(buf);
 
@@ -84,6 +104,12 @@ void process_inbound_udp(int sock) {
     for( head = response_list; head != NULL; head = head->next ){
       data_packet_t *packet = head->packet;
       /* TODO: send back this packet */
+      if( packet->header.packet_type == 3  ){
+        printf("DEBUG : send packet with type = DATA seq = %d\n", packet->header.seq_num);
+      }
+      if(packet->header.packet_type == 4){
+        printf("DEBUG : send packet with type = ACK ack = %d\n", packet->header.ack_num);
+      }
       spiffy_sendto(sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *) &from, sizeof(struct sockaddr));
     }
   }
@@ -103,8 +129,6 @@ void process_get(char *chunkfile, char *outputfile) {
   for( head = whohas_list; head != NULL; head = head->next){
     data_packet_t *packet = head->packet;
     broadcast(packet, &config);
-      printf("DEBUG broadcast over\n");
-
     /* TODO: call spiffy_sendto() to flood this WHOHAS packet*/
   }
 }
@@ -170,23 +194,5 @@ void peer_run(bt_config_t *config) {
   }
 }
 
-/* Broadcast WHOHAS request to all node except myself */
-void broadcast(data_packet_t *packet, bt_config_t *config){
-    bt_peer_t *node;
-    short my_id = config->identity;
 
-    node = config->peers;
-    while(node!=NULL){
-        // Don't send request to itself
-        if(node->id == my_id){
-            node = node->next;
-            continue;
-        }   
-        // Send request
-        spiffy_sendto(sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *) &node->addr, sizeof(struct sockaddr));
-        // Iterate to next node
-        node = node->next;
-    }         
-    return;
-}
 

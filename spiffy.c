@@ -59,6 +59,9 @@ int spiffy_recvfrom (int socket, void *buffer, size_t size, int flags, struct so
 	*lengthPtr = sizeof(struct sockaddr_in);
         local_fromlen = sizeof(struct sockaddr_in);
 
+        /* Added by shuo, remove compile warnings */
+         local_fromlen = local_fromlen + 1;
+         local_fromlen = local_fromlen - 1;
 	if (!giSpiffyEnabled) {
 		printf("Spiffy not enabled, using normal recvfrom\n");
 		return recvfrom(socket, buffer, size, flags, addr, lengthPtr);
@@ -118,7 +121,7 @@ int spiffy_init (long lNodeID, const struct sockaddr *addr, socklen_t addrlen) {
 	gsSrcPort = ((struct sockaddr_in *)addr)->sin_port;
 
 	fprintf(stderr, "Spiffy local stuff:  %08x:%d\n",
-		glSrcAddr, ntohs(gsSrcPort));
+		(unsigned int)glSrcAddr, ntohs(gsSrcPort));
 	fprintf(stderr, "Spiffy setup complete.  %s:%d\nDelete this line after testing.\n",
 		inet_ntoa(gsSpiffyRouter.sin_addr), ntohs(gsSpiffyRouter.sin_port));
 	return 0;

@@ -16,11 +16,13 @@ recv_buffer_list_t *recv_list = NULL;
 void init_datalist(int sockfd, char *content){
 	/* this function receive the data from packet.c(from master data file) and separate them into chunks */
 	data_list_t *new_element = (data_list_t *)malloc(sizeof(data_list_t));
+	new_element->data = (data_t *)malloc(sizeof(data_t));
+	new_element->data->content = content;
+
 	new_element->data->sockfd = sockfd;
-	new_element->data->send_window = 1;	
 
 	/* init the congestion control variable */
-	new_element->data->send_window = 1;
+	new_element->data->send_window = 4;
 	new_element->data->ssthresh = 8;
 	new_element->data->congestion_control_state = SLOWSTART;
 	new_element->data->start = new_element->data->end = -1;
@@ -80,7 +82,11 @@ data_packet_list_t* send_data(int sockfd){
 	int diff = to_send->end - to_send->start;
 
 	/* if diff less than max window size, send packets */
-	if( diff < to_send->send_window  && to_send->end <=  CHUNK_PACKET_NUMBER - 1 ){
+	printf("DEBUG: Call send_data, can send packet = %d, start = %d, end = %d, window = %d\n", to_send->send_window - diff,to_send->start, to_send->end, to_send->send_window);
+	
+	//if( diff < to_send->send_window  && to_send->end <=  CHUNK_PACKET_NUMBER - 1 ){
+	if( diff < to_send->send_window  && to_send->end <=  8 ){
+
 		int i;
 		for( i = 0;i < to_send->send_window - diff; i ++){
 			
@@ -94,13 +100,15 @@ data_packet_list_t* send_data(int sockfd){
 
 
 			char *content = get_content_by_index(to_send, to_send->end);
-			data_packet_t *packet = init_packet('3', content);
+			data_packet_t *packet = init_packet(3, content, 1024);
 
+			printf("DEBUG: come back from init_packet()\n");
 			/* notice that write the seq number here */
 			/* notice that I do not change to the network bit sequence */
 			packet->header.seq_num = to_send->end;
 			to_send->state[to_send->end] = UNACKED;
 
+			printf("DEBUG: go into list operation\n");
 			/* add the packet to the list */
 			if ( ret == NULL ){
   				ret = (data_packet_list_t *)malloc( sizeof(data_packet_list_t));
@@ -115,6 +123,7 @@ data_packet_list_t* send_data(int sockfd){
   			}
 		}
 	}
+	printf("DEBUG : send over window start = %d window end = %d\n", to_send->start, to_send->end);
 	return ret;
 }
 
@@ -125,7 +134,7 @@ data_packet_list_t* handle_ack(int sockfd , int ack_number){
 		return NULL;
 	}
 	int i;
-	for(i = to_send->start; i <= ack_number; i ++){
+	for(i = to_send->start + 1; i <= ack_number; i ++){
 		if( to_send->state[i] != UNACKED){
 			printf("Should never happens, a packet not even send but got acked\n");
 			return NULL;
@@ -133,7 +142,7 @@ data_packet_list_t* handle_ack(int sockfd , int ack_number){
 		to_send->state[i] = ACKED;
 	}
 	to_send->start = ack_number;
-
+	printf("DEBUG : recv Ack over, window start = %d window end = %d\n", to_send->start, to_send->end);
 	/* Since the window size changed, we have a possibility to send more data, so call send_data() here */
 	return send_data(sockfd);
 }
@@ -146,7 +155,7 @@ data_packet_list_t* handle_ack(int sockfd , int ack_number){
 
 void init_recv_buffer(int sockfd, char *hash){
 	int i;
-
+	printf("DEBUG initing hash = %s\n", hash);
 	recv_buffer_list_t *new_element = (recv_buffer_list_t *)malloc( sizeof(recv_buffer_list_t));
 	new_element->buffer = (recv_buffer_t *)malloc( sizeof(recv_buffer_t));
 
@@ -196,7 +205,7 @@ data_packet_list_t* recv_data(data_packet_t *packet, int sockfd){
 			}
 
 
-			data_packet_t *packet = init_packet(4, NULL);
+			data_packet_t *packet = init_packet(4, NULL, 0);
 
 			/* loop the data structure and find the highest continue "recved" data */
 			for(i = head->buffer->expected; i < 1024; i ++){
@@ -236,9 +245,12 @@ data_packet_list_t* recv_data(data_packet_t *packet, int sockfd){
 /* helper functions */
 recv_buffer_t *get_buffer_by_hash(char *hash){
 	recv_buffer_list_t *head;
+	printf("DEBUG get_buffer_by_hash\n");
+	printf("input hash = %s\n", hash);
 	for( head = recv_list ; head != NULL; head = head->next ){
 		int find = 1;
 		int i;
+		printf("matching hash = %s\n", head->buffer->hash);
 		for(i  = 0; i < 20; i ++){
 			if( head->buffer->hash[i] != hash[i]){
 				find = 0;
@@ -249,5 +261,6 @@ recv_buffer_t *get_buffer_by_hash(char *hash){
 			return head->buffer;
 		}
 	}
+	printf("DEBUG exit get_buffer_by_hash\n");
 	return NULL;
 }
