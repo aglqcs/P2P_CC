@@ -124,8 +124,14 @@ data_packet_list_t* handle_ack(int sockfd , int ack_number){
 		printf("in handle_ack(), can not locate data_t for hash [%d]\n", sockfd);
 		return NULL;
 	}
-
-	to_send->state[ack_number] = ACKED;
+	int i;
+	for(i = to_send->start; i <= ack_number; i ++){
+		if( to_send->state[i] != UNACKED){
+			printf("Should never happens, a packet not even send but got acked\n");
+			return NULL;
+		}
+		to_send->state[i] = ACKED;
+	}
 	to_send->start = ack_number;
 
 	/* Since the window size changed, we have a possibility to send more data, so call send_data() here */
@@ -140,16 +146,23 @@ data_packet_list_t* handle_ack(int sockfd , int ack_number){
 
 void init_recv_buffer(int sockfd, char *hash){
 	int i;
-	recv_buffer_list_t *new_element = (recv_buffer_list_t *)malloc(sizeof(recv_buffer_list_t));
+
+	recv_buffer_list_t *new_element = (recv_buffer_list_t *)malloc( sizeof(recv_buffer_list_t));
+	new_element->buffer = (recv_buffer_t *)malloc( sizeof(recv_buffer_t));
+
 	new_element->buffer->sockfd = sockfd;
 	new_element->buffer->expected = 0;
-	new_element->buffer->hash = hash;
-
+	new_element->buffer->hash = malloc(20);
+	for(i = 0;i < 20; i ++){
+		new_element->buffer->hash[i] = hash[i];
+	}
 
 	for(i = 0; i < CHUNK_PACKET_NUMBER; i ++){
+
 		new_element->buffer->chunks[i].acked = FALSE;
 		new_element->buffer->chunks[i].recved = FALSE;
 	} 
+
 	if( recv_list == NULL ){
 		new_element->next = NULL;
 		recv_list = new_element;

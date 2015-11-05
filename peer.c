@@ -61,12 +61,13 @@ void process_inbound_udp(int sock) {
   fromlen = sizeof(from);
   spiffy_recvfrom(sock, buf, BUFLEN, 0, (struct sockaddr *) &from, &fromlen);
 
-  printf("PROCESS_INBOUND_UDP SKELETON -- replace!\n"
+ /* printf("PROCESS_INBOUND_UDP SKELETON -- replace!\n"
 	 "Incoming message from %s:%d\n%s\n\n", 
 	 inet_ntoa(from.sin_addr),
 	 ntohs(from.sin_port),
 	 buf);
-
+*/
+  printf("DEBUG inbound udp\n");
   /* first generate the incoming packet */
   data_packet_t *packet = build_packet_from_buf(buf);
 
@@ -102,6 +103,8 @@ void process_get(char *chunkfile, char *outputfile) {
   for( head = whohas_list; head != NULL; head = head->next){
     data_packet_t *packet = head->packet;
     broadcast(packet, &config);
+      printf("DEBUG broadcast over\n");
+
     /* TODO: call spiffy_sendto() to flood this WHOHAS packet*/
   }
 }

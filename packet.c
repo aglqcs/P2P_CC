@@ -34,7 +34,7 @@ typedef struct data_packet {
 
 file_manager_t file_manager;
 
-int check_file_manager(){
+int check_file_manager(bt_config_t* config){
 	int i;
 	for(i = 0;i < file_manager.chunk_count; i ++){
 		recv_buffer_t *recv_buffer = get_buffer_by_hash( file_manager.hash_set[i] );
@@ -55,7 +55,16 @@ int check_file_manager(){
 	/* if get here means the file is full*/
 	// here write back and return 1
 
+	FILE *fp = fopen(config->output_file, "r" );
+	for(i = 0;i < file_manager.chunk_count; i ++){
+		recv_buffer_t *recv_buffer = get_buffer_by_hash( file_manager.hash_set[i] );
+		int j;
+		for(j = 0;j < 512 ; j ++){
+			fwrite(recv_buffer->chunks[j].content,1, 1024,fp);
+		}
+	}
 	printf("GET FILE\n");
+	fclose(fp);
 	return 1;
 }
 
@@ -232,7 +241,7 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 	/*	read a incoming packet, 
 		return a list of response packets
 	*/
-	printf("handle_packet() type == %c\n", packet->header.packet_type);
+	printf("handle_packet() type == %d \n", packet->header.packet_type);
 	if(packet->header.packet_type == 0){
 		/* if incoming packet is a WHOHAS packet */
 		/* scan the packet datafiled to fetch the hashes and get the count */
@@ -304,7 +313,7 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 
 			// after decide the node that I will be talking to, init the recv list
 			// if decide to use this node {
-			init_recv_buffer(sockfd, data);
+			init_recv_buffer(sockfd, &data);
 
 			data[20] = '\0';
 			if ( ret == NULL ){
@@ -355,7 +364,7 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 			printf("successfully get the data chunk, writing back to disk\n");
 		}
 		*/
-		check_file_manager();
+		check_file_manager(config);
 		return ret;
 	}
 	else if( packet->header.packet_type == 4){
@@ -374,6 +383,7 @@ data_packet_list_t *generate_WHOHAS(char *chunkfile){
 	/*
 		this function returns a list of WHOHAS packets when user type GET command
 	*/
+	printf("DEBUG generate_WHOHAS()\n");
 	file_manager.init = 1;
 	file_manager.chunk_count = 0;
 	file_manager.top = 0;
@@ -397,6 +407,8 @@ data_packet_list_t *generate_WHOHAS(char *chunkfile){
   			return NULL;
   		}
   		hex2binary((char*)line, 40, (uint8_t *)(data + count));
+
+  		printf("hash = %s\n", data + count);
   		count += 20;
   	
   		memset(line, 0, 40);
