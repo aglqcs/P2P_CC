@@ -50,7 +50,6 @@ int read_chunkfile(char * chunkfile, char *data){
   	int count = 0;
   	while( fscanf(fp, "%d %s\n", &index, line)  > 0 ){
   		/* the max size of this line should less then 40 */
-  		printf("line = %s\n", line);
         if( strlen( line ) > 40 )
   			return -1;
   		hex2binary((char*)line, 40, (uint8_t *)(data + count));
@@ -78,7 +77,6 @@ data_packet_t *init_packet(char type, char *data){
 
 	data_packet_t *packet = (data_packet_t *) malloc( sizeof(data_packet_t));
 	memset( packet, 0, sizeof(data_packet_t));
-    printf("Clear packets\n");
 	packet->header.magicnum = 15441;
 	packet->header.version = 1;
 	packet->header.packet_type = type;
@@ -92,7 +90,6 @@ data_packet_t *init_packet(char type, char *data){
 
 	/* write the data */
 
-    printf("determine type: %c\n", type);
 	/* if type == WHOHAS || IHAVE , write the count of hashes and do the padding */
 	if( type == 0 || type == 1){
 		char padding[4];

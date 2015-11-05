@@ -1,0 +1,2 @@
+1. In the code, we have many fixed size char arrays without carefully examined. Thus buffer overflow is possible.
+2. Haven't yet implement congestion control or flow control. Thus if there are too many nodes, it may cost time out or some unexpectible error.
