@@ -14,7 +14,7 @@
 
 
 typedef struct data{
-	char *hash;
+	int sockfd;
 	char *content; // 512 * 1024 byte data
 	char state[CHUNK_PACKET_NUMBER];
 	int send_window;

@@ -13,10 +13,10 @@ recv_buffer_list_t *recv_list = NULL;
 /*
 	start functions for sender side
 */
-void init_datalist(char *hash, char *content){
+void init_datalist(int sockfd, char *content){
 	/* this function receive the data from packet.c(from master data file) and separate them into chunks */
 	data_list_t *new_element = (data_list_t *)malloc(sizeof(data_list_t));
-	new_element->data->hash = hash;
+	new_element->data->sockfd = sockfd;
 	new_element->data->send_window = 1;	
 
 	/* init the congestion control variable */
@@ -49,13 +49,13 @@ char* get_content_by_index(data_t *data, int index){
 	return content;
 }
 
-data_t* get_data_by_hash(char *hash){
+data_t* get_data_by_sockfd(int sockfd){
 	data_list_t *p;
 	for( p = list; p != NULL; p = p->next){
 		int find = 1;
 		int i;
 		for( i = 0; i < 20; i ++){
-			if(hash[i] != p->data->hash[i]) {
+			if( sockfd != p->data->sockfd) {
 				find = -1;
 				break;
 			}
@@ -67,12 +67,12 @@ data_t* get_data_by_hash(char *hash){
 	return NULL;
 }
 
-data_packet_list_t* send_data(char *hash){
-	data_t *to_send = get_data_by_hash(hash);
+data_packet_list_t* send_data(int sockfd){
+	data_t *to_send = get_data_by_sockfd(sockfd);
 
 	data_packet_list_t* ret = NULL;
 	if( to_send == NULL ){
-		printf("in send_data(), can not locate data_t for hash [%s]\n", hash);
+		printf("in send_data(), can not locate data_t for hash [%d]\n", sockfd);
 		return NULL;
 	}
 
@@ -118,10 +118,10 @@ data_packet_list_t* send_data(char *hash){
 	return ret;
 }
 
-data_packet_list_t* handle_ack(char *hash , int ack_number){
-	data_t *to_send = get_data_by_hash(hash);
+data_packet_list_t* handle_ack(int sockfd , int ack_number){
+	data_t *to_send = get_data_by_sockfd(sockfd);
 	if( to_send == NULL ){
-		printf("in handle_ack(), can not locate data_t for hash [%s]\n", hash);
+		printf("in handle_ack(), can not locate data_t for hash [%d]\n", sockfd);
 		return NULL;
 	}
 
@@ -129,7 +129,7 @@ data_packet_list_t* handle_ack(char *hash , int ack_number){
 	to_send->start = ack_number;
 
 	/* Since the window size changed, we have a possibility to send more data, so call send_data() here */
-	return send_data(hash);
+	return send_data(sockfd);
 }
 
 

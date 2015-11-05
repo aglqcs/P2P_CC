@@ -7,8 +7,8 @@
 #include <netinet/in.h>
 #include "flow_control.h"
 
-extern data_packet_list_t* send_data(char *hash);
-extern void init_datalist(char *hash, char *content);
+extern data_packet_list_t* send_data(int sockfd);
+extern void init_datalist(int sockfd, char *content);
 extern data_packet_list_t* recv_data(data_packet_t *packet, int sockfd);
 extern void init_recv_buffer(int sockfd);
 
@@ -304,10 +304,9 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 		char *data = get_data_from_hash(hash, config);
 		
 		/* init the flow control machine for sending back the data */
-		init_datalist(hash,data);
+		init_datalist(sockfd,data);
 		/* and call the first send */
-		printf("Fetch data from file = %s\n", data);
-		data_packet_list_t *ret = send_data(hash);
+		data_packet_list_t *ret = send_data(sockfd);
 
 		return ret;
 	}
@@ -323,7 +322,7 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 			printf("successfully get the data chunk, writing back to disk\n");
 		}
 		*/
-		
+
 		return ret;
 	}
 	else if( packet->header.packet_type == 4){
