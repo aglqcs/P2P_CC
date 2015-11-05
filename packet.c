@@ -282,7 +282,10 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, st
             
             // Send packet if its the first peer having the chunk
             if(c_list->highest_idx == 0){
+                printf("First owner with this chunk\n");
                 struct sockaddr_in* o_addr = get_chunk_owner(data, c_list);
+                // Print the list after update chunk_owner_list
+                print_list(c_list);
                 spiffy_sendto(sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *) &o_addr, sizeof(struct sockaddr));
                 continue;
             }
@@ -472,5 +475,17 @@ struct sockaddr_in* get_chunk_owner(char* data, chunk_owner_list_t* c_list){
     if(dest_node->chosen_node_idx > dest_node->highest_idx)
         dest_node->chosen_node_idx = 0;
     return dest_node->list[dest_node->chosen_node_idx];
+}
+
+/* Test print chunk_owner_list */
+void print_list(chunk_owner_list_t* list){
+    printf("=========== PRINT CHUNK LIST ========\n");
+    chunk_owner_list_t *itr;
+    for(itr=list; itr!=NULL;itr=itr->next){
+        printf("== HASH: %s\n", itr->chunk_hash);
+        printf("== Number of nodes in list: %d\n", itr->highest_idx+1);
+        printf("== Chose node IDX: %d\n", itr->chosen_node_idx);
+        printf("+++++++++++++++++++++++++++++++++\n");
+    }
 }
 
