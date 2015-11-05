@@ -80,7 +80,7 @@ data_packet_list_t* send_data(int sockfd){
 	int diff = to_send->end - to_send->start;
 
 	/* if diff less than max window size, send packets */
-	if( diff < to_send->send_window ){
+	if( diff < to_send->send_window  && to_send->end <=  CHUNK_PACKET_NUMBER - 1 ){
 		int i;
 		for( i = 0;i < to_send->send_window - diff; i ++){
 			
@@ -138,15 +138,17 @@ data_packet_list_t* handle_ack(int sockfd , int ack_number){
 	start functions for recver side
 */
 
-void init_recv_buffer(int sockfd){
+void init_recv_buffer(int sockfd, char *hash){
 	int i;
 	recv_buffer_list_t *new_element = (recv_buffer_list_t *)malloc(sizeof(recv_buffer_list_t));
 	new_element->buffer->sockfd = sockfd;
 	new_element->buffer->expected = 0;
+	new_element->buffer->hash = hash;
+
+
 	for(i = 0; i < CHUNK_PACKET_NUMBER; i ++){
 		new_element->buffer->chunks[i].acked = FALSE;
 		new_element->buffer->chunks[i].recved = FALSE;
-		new_element->buffer->chunks[i].offset = i;
 	} 
 	if( recv_list == NULL ){
 		new_element->next = NULL;
@@ -157,6 +159,8 @@ void init_recv_buffer(int sockfd){
 		recv_list = new_element;
 	}
 }
+
+
 data_packet_list_t* recv_data(data_packet_t *packet, int sockfd){
 	int seq = packet->header.seq_num;
 	recv_buffer_list_t *head;
@@ -214,4 +218,23 @@ data_packet_list_t* recv_data(data_packet_t *packet, int sockfd){
 		return NULL;
 	}
 	return ret;
+}
+
+/* helper functions */
+recv_buffer_t *get_buffer_by_hash(char *hash){
+	recv_buffer_list_t *head;
+	for( head = recv_list ; head != NULL; head = head->next ){
+		int find = 1;
+		int i;
+		for(i  = 0; i < 20; i ++){
+			if( head->buffer->hash[i] != hash[i]){
+				find = 0;
+				break;
+			}
+		}
+		if( find == 1){
+			return head->buffer;
+		}
+	}
+	return NULL;
 }

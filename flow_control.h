@@ -35,7 +35,6 @@ typedef struct data_list{
 typedef struct data_chunk{
 	int acked;
 	int recved;
-	int offset;
 	char content[1024];
 } data_chunk_t;
 
@@ -43,10 +42,21 @@ typedef struct data_chunk{
 typedef struct recv_buffer{
 	int sockfd;
 	int expected;
+	char *hash;
 	data_chunk_t chunks[CHUNK_PACKET_NUMBER];
 } recv_buffer_t;
 
 typedef struct recv_buffer_list{
 	recv_buffer_t *buffer;
 	struct recv_buffer_list *next;
-}recv_buffer_list_t;
+} recv_buffer_list_t;
+
+
+
+typedef struct File_manager{
+	int init;
+	int chunk_count;
+	char **hash_set;
+	int top;
+} file_manager_t;
+

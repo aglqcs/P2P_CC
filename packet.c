@@ -10,8 +10,9 @@
 extern data_packet_list_t* send_data(int sockfd);
 extern void init_datalist(int sockfd, char *content);
 extern data_packet_list_t* recv_data(data_packet_t *packet, int sockfd);
-extern void init_recv_buffer(int sockfd);
-
+extern void init_recv_buffer(int sockfd, char *hash);
+extern data_packet_list_t* handle_ack(int sockfd , int ack_number);
+extern  recv_buffer_t *get_buffer_by_hash(char *hash);
 /*
 for convenient show the structrue here
 
@@ -30,6 +31,33 @@ typedef struct data_packet {
   char data[100];
 } data_packet_t;
 */
+
+file_manager_t file_manager;
+
+int check_file_manager(){
+	int i;
+	for(i = 0;i < file_manager.chunk_count; i ++){
+		recv_buffer_t *recv_buffer = get_buffer_by_hash( file_manager.hash_set[i] );
+		if( recv_buffer == NULL){
+			printf("Error: in check_file_manager() can not locate the buffer for hash = %s\n",file_manager.hash_set[i] );
+			return -1;
+		}
+		// check if this chunk is full
+		int j;
+		for(j = 0;j < 512 ; j ++){
+			if( recv_buffer->chunks[i].recved == FALSE ){
+				/* means not full */
+				return -1;
+			}
+		}
+	}
+
+	/* if get here means the file is full*/
+	// here write back and return 1
+
+	printf("GET FILE\n");
+	return 1;
+}
 
 int read_chunkfile(char * chunkfile, char *data){
 /* An example chunk file is:
@@ -61,6 +89,7 @@ int read_chunkfile(char * chunkfile, char *data){
   	fclose(fp);
 	return count;  	
 }
+
 data_packet_t *init_packet(char type, char *data){
 /*	This function write the packet header and data and return a packet object
 	notice that here I DO NOT write the seq and ack of the header
@@ -273,9 +302,9 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 			/*	add node selection here
 			*/
 
-			// init the recv list
-			init_recv_buffer(sockfd);
-
+			// after decide the node that I will be talking to, init the recv list
+			// if decide to use this node {
+			init_recv_buffer(sockfd, data);
 
 			data[20] = '\0';
 			if ( ret == NULL ){
@@ -291,6 +320,10 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 				ret = new_block;
 			}
 			memset(data, 0 , 20);
+			// }
+			// else {
+			//	return NULL
+			//}
 		}
 		return ret;
 	}
@@ -322,12 +355,13 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 			printf("successfully get the data chunk, writing back to disk\n");
 		}
 		*/
-
+		check_file_manager();
 		return ret;
 	}
 	else if( packet->header.packet_type == 4){
 		/* if the incoming packet is an ACK packet */
-	//	data_packet_list_t *ret = handle_ack(char *hash , int ack_number)
+		data_packet_list_t *ret = handle_ack(sockfd , packet->header.ack_num);
+		return ret;
 	}
 	else{
 		/* TODO(for next checkpoint) : if incoming packet is other packets*/
@@ -340,6 +374,10 @@ data_packet_list_t *generate_WHOHAS(char *chunkfile){
 	/*
 		this function returns a list of WHOHAS packets when user type GET command
 	*/
+	file_manager.init = 1;
+	file_manager.chunk_count = 0;
+	file_manager.top = 0;
+
   	data_packet_list_t *ret = NULL;
 
   	char data[1200];
@@ -363,6 +401,8 @@ data_packet_list_t *generate_WHOHAS(char *chunkfile){
   	
   		memset(line, 0, 40);
 
+  		file_manager.chunk_count += 1;
+
   		if( count >= 1000 ){
   			data[count] = '\0';
   			data_packet_t *packet = init_packet(0,  data);
@@ -382,6 +422,16 @@ data_packet_list_t *generate_WHOHAS(char *chunkfile){
   		}
   	}
 
+  	file_manager.hash_set = (char **)malloc(file_manager.chunk_count * sizeof(char *));
+  	/* re-read the file to get the offset*/
+  	FILE *fp2 = fopen( chunkfile, "r");
+  	while( fscanf(fp2, "%d %s\n", &index, line)  > 0 ){
+  		char temp[20];
+  		hex2binary((char*)line, 40, (uint8_t *)(temp));
+		file_manager.hash_set[file_manager.top] = temp;
+		file_manager.top++;
+  	}
+
   	data[count] = '\0';
   	data_packet_t *packet = init_packet(0,  data);
   	if ( ret == NULL ){
@@ -396,6 +446,7 @@ data_packet_list_t *generate_WHOHAS(char *chunkfile){
   		ret = new_block;
   	}
   	fclose(fp);
+  	fclose(fp2);
   	return ret;
 }
 
