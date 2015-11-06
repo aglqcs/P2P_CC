@@ -37,8 +37,24 @@ typedef struct data_packet {
 file_manager_t file_manager;
 
 int check_file_manager(bt_config_t* config){
+	printf("DEBUG: GO into file_manager, chunkcount = %d\n", file_manager.chunk_count);
 	int i;
+
+	/*for test*/
+	int full_count = 0;
 	for(i = 0;i < file_manager.chunk_count; i ++){
+		if( -1 == is_buffer_full(file_manager.offset[i])){
+			printf("DEBUG : chunk %d NOTFULL\n", file_manager.offset[i]);
+		}
+		else{
+			full_count ++;
+			printf("DEBUG: chunk %d is FULL\n", file_manager.offset[i]);
+		}
+	}
+	printf("DEBUG : full chunk = %d\n", full_count);
+
+	for(i = 0;i < file_manager.chunk_count; i ++){
+		printf("Offset[%d] = %d\n", i, file_manager.offset[i]);
 		if( -1 == is_buffer_full(file_manager.offset[i])){
 			printf("In check_file_manager, file is not full, first unfull offset = %d\n",file_manager.offset[i]);
 			return -1;
@@ -47,15 +63,14 @@ int check_file_manager(bt_config_t* config){
 
 	/* if get here means the file is full*/
 	// here write back and return 1
-	printf("DEBUG: File is full, writing back to disk\n");
+	printf("DEBUG: File is full, writing back to disk location = %s\n", config->output_file);
 	
-	FILE *fp = fopen(config->output_file, "r" );
+	FILE *fp = fopen(config->output_file, "w");
 	for(i = 0;i < file_manager.chunk_count; i ++){
 		int j;
 		char temp[1024];
 		memset(temp, 0 , 1024);
 		for(j = 0;j < 512 ; j ++){
-			printf("i == %d\n",j);
 			copy_chunk_data(temp, file_manager.offset[i], j);
 			fwrite(temp,1, 1024,fp);
 			memset(temp, 0 , 1024);

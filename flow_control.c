@@ -107,6 +107,8 @@ data_packet_list_t* send_data(int sockfd){
 			packet->header.seq_num = to_send->end;
 			to_send->state[to_send->end] = UNACKED;
 
+			/* notice that I need to know which hash chunk of the data belong to, so I add to ACK field*/
+
 			/* add the packet to the list */
 			if ( ret == NULL ){
   				ret = (data_packet_list_t *)malloc( sizeof(data_packet_list_t));
@@ -197,7 +199,7 @@ data_packet_list_t* recv_data(data_packet_t *packet, int sockfd){
 			/* if never saw this part before, write it to memory*/
 			if( head->buffer->chunks[seq].recved == FALSE){
 				head->buffer->chunks[seq].recved = TRUE;
-				printf("DEBUG modify recved = true i = %d\n", seq);
+				printf("DEBUG modify recved = true i = %d addr = %d\n", seq, &head->buffer);
   				for(i = 0;i < 1024; i ++){
   					head->buffer->chunks[seq].content[i] = packet->data[i];
   				}
@@ -274,15 +276,12 @@ recv_buffer_t *get_buffer_by_offset(int offset){
 
 void copy_chunk_data(char *buffer, int offset, int chunkpos){
 	recv_buffer_list_t *head;
-	printf("offset = %d, chunkpos = %d\n", offset, chunkpos);
 	for( head = recv_list ; head != NULL; head = head->next ){
 		if( offset == head->buffer->offset ){
 			int i;
-			printf("FIND data = %s\n", head->buffer->chunks[chunkpos].content);
 			for(i = 0; i < 1024;i ++){
 				// copy data here
-				printf("%d ",i);
-				char ch = head->buffer->chunks[511].content[i];
+				buffer[i] = head->buffer->chunks[chunkpos].content[i];
 			}
 		}
 	}
