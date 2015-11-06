@@ -27,4 +27,4 @@ data_packet_t *init_packet(char type, char *data, int length);
 int read_chunkfile(char * chunkfile, char *ret);
 data_packet_t *build_packet_from_buf(char *buf);
 data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, int sockfd);
-data_packet_list_t *generate_WHOHAS(char *chunkfile);
+data_packet_list_t *generate_WHOHAS(char *chunkfile, bt_config_t* config);

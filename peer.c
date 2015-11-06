@@ -74,6 +74,7 @@ int main(int argc, char **argv) {
 
 
 void process_inbound_udp(int sock) {
+  printf("\n"); // DEBUG
   #define BUFLEN 1500
   struct sockaddr_in from;
   socklen_t fromlen;
@@ -119,7 +120,7 @@ void process_get(char *chunkfile, char *outputfile) {
   /* Here open the chunkfile, and write data based on the content of chunkfile*/
   /* notice that here I hard code the length of data to 100, is this enough ?*/ 
 
-  data_packet_list_t *whohas_list = generate_WHOHAS(chunkfile);
+  data_packet_list_t *whohas_list = generate_WHOHAS(chunkfile, &config);
 
   if( NULL == whohas_list){
     printf("can not generate a packet\n");

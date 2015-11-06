@@ -42,7 +42,7 @@ typedef struct data_chunk{
 typedef struct recv_buffer{
 	int sockfd;
 	int expected;
-	char *hash;
+	int offset;
 	data_chunk_t chunks[CHUNK_PACKET_NUMBER];
 } recv_buffer_t;
 
@@ -56,7 +56,7 @@ typedef struct recv_buffer_list{
 typedef struct File_manager{
 	int init;
 	int chunk_count;
-	char **hash_set;
+	int *offset;
 	int top;
 } file_manager_t;
 

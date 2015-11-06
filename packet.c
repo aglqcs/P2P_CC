@@ -10,9 +10,11 @@
 extern data_packet_list_t* send_data(int sockfd);
 extern void init_datalist(int sockfd, char *content);
 extern data_packet_list_t* recv_data(data_packet_t *packet, int sockfd);
-extern void init_recv_buffer(int sockfd, char *hash);
+extern void init_recv_buffer(int sockfd, int offset);
 extern data_packet_list_t* handle_ack(int sockfd , int ack_number);
-extern  recv_buffer_t *get_buffer_by_hash(char *hash);
+extern recv_buffer_t *get_buffer_by_offset(int offset);
+extern int is_buffer_full(int offset);
+extern void copy_chunk_data(char *buffer, int offset, int chunkpos);
 /*
 for convenient show the structrue here
 
@@ -37,34 +39,31 @@ file_manager_t file_manager;
 int check_file_manager(bt_config_t* config){
 	int i;
 	for(i = 0;i < file_manager.chunk_count; i ++){
-		recv_buffer_t *recv_buffer = get_buffer_by_hash( file_manager.hash_set[i] );
-		if( recv_buffer == NULL){
-			printf("Error: in check_file_manager() can not locate the buffer for hash = %s\n",file_manager.hash_set[i] );
+		if( -1 == is_buffer_full(file_manager.offset[i])){
+			printf("In check_file_manager, file is not full, first unfull offset = %d\n",file_manager.offset[i]);
 			return -1;
-		}
-		// check if this chunk is full
-		int j;
-		for(j = 0;j < 512 ; j ++){
-			if( recv_buffer->chunks[i].recved == FALSE ){
-				/* means not full */
-				return -1;
-			}
 		}
 	}
 
 	/* if get here means the file is full*/
 	// here write back and return 1
-
+	printf("DEBUG: File is full, writing back to disk\n");
+	
 	FILE *fp = fopen(config->output_file, "r" );
 	for(i = 0;i < file_manager.chunk_count; i ++){
-		recv_buffer_t *recv_buffer = get_buffer_by_hash( file_manager.hash_set[i] );
 		int j;
+		char temp[1024];
+		memset(temp, 0 , 1024);
 		for(j = 0;j < 512 ; j ++){
-			fwrite(recv_buffer->chunks[j].content,1, 1024,fp);
+			printf("i == %d\n",j);
+			copy_chunk_data(temp, file_manager.offset[i], j);
+			fwrite(temp,1, 1024,fp);
+			memset(temp, 0 , 1024);
 		}
 	}
 	printf("GET FILE\n");
 	fclose(fp);
+	
 	return 1;
 }
 
@@ -187,6 +186,46 @@ int find_in_local_has(char *hash, char *local){
 	return 0;
 }
 
+int get_off_set_from_master_chunkfile(char *hash, bt_config_t* config){
+	char *master_file = config->chunk_file;
+	FILE *fp = fopen(master_file, "r");
+	if( fp == NULL ){
+		printf("Can not locate file %s\n", hash);
+		return -1;
+	}
+	char content_path[512];
+	char temp[40];
+	int index;
+	/* read the content path first */
+	fscanf(fp, "%s %s\n", temp, content_path);
+	fscanf(fp, "%s\n", temp);
+	memset(temp,0 , 40);
+
+	printf("DEBUG path = %s\n",content_path);
+	int find = -1;
+	while( find != 1 && fscanf(fp,"%d %s",&index, temp ) > 0){
+		char local[20];
+		/* calculate the binary hash from the master chunk file */
+		hex2binary((char*)temp, 40, (uint8_t *)(local));
+
+		int cmp = 1;
+		int i;
+		/* and compare if there is a match of hash values */
+		for( i = 0;i < 20;i ++){
+			if( local[i] != hash[i] ){
+				cmp = 0;
+				break;
+			}
+		}
+
+		if( cmp == 1){
+			printf("find local content for has = %s offset = %d\n", local, index);
+			return index;
+		}
+	}
+	return -1;
+}
+
 char* get_data_from_hash(char *hash , bt_config_t* config){
 	/*	read the master data file and return the 512KB data for a chunk
 		Two steps:
@@ -239,7 +278,6 @@ char* get_data_from_hash(char *hash , bt_config_t* config){
 	fread(data,512 * 1024, 1, content);
 	fclose(content);
 	fclose(fp);
-		printf("\nDEBUG: the content length = %d %d\n", strlen(data), sizeof(data));
 
 	return data;
 }
@@ -327,7 +365,13 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 
 			// after decide the node that I will be talking to, init the recv list
 			// if decide to use this node {
-			init_recv_buffer(sockfd, data);
+			int offset = get_off_set_from_master_chunkfile(data, config);
+			if( offset == -1){
+				printf("Can not init the recv_buffer with hash = %s\n", data);
+				return NULL;
+			}
+			printf("DEBUG init recv_buffer with offset = %d\n", offset);
+			init_recv_buffer(sockfd, offset);
 
 			data[20] = '\0';
 			if ( ret == NULL ){
@@ -377,7 +421,9 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 			printf("successfully get the data chunk, writing back to disk\n");
 		}
 		*/
+		printf("DEBUG after recv_data()\n");
 		check_file_manager(config);
+		printf("DEBUG after check_file_manager()\n");
 		return ret;
 	}
 	else if( packet->header.packet_type == 4){
@@ -393,7 +439,7 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 	return NULL;
 }
 
-data_packet_list_t *generate_WHOHAS(char *chunkfile){
+data_packet_list_t *generate_WHOHAS(char *chunkfile, bt_config_t *config){
 	/*
 		this function returns a list of WHOHAS packets when user type GET command
 	*/
@@ -447,15 +493,16 @@ data_packet_list_t *generate_WHOHAS(char *chunkfile){
   			memset(data, 0 , 1200);
   		}
   	}
-
-  	file_manager.hash_set = (char **)malloc(file_manager.chunk_count * sizeof(char *));
+  	
+  	file_manager.offset = (int *)malloc( file_manager.chunk_count * sizeof(int));
   	/* re-read the file to get the offset*/
   	FILE *fp2 = fopen( chunkfile, "r");
   	while( fscanf(fp2, "%d %s\n", &index, line)  > 0 ){
   		char temp[20];
   		hex2binary((char*)line, 40, (uint8_t *)(temp));
-		file_manager.hash_set[file_manager.top] = temp;
-		printf("DEBUG: init file_manager with i = %d hash = %s\n", file_manager.top, file_manager.hash_set[file_manager.top]);
+	
+		file_manager.offset[file_manager.top] = get_off_set_from_master_chunkfile(temp,config);
+		printf("DEBUG: init file_manager with i = %d index = %d\n", file_manager.top, file_manager.offset[file_manager.top]);
 
 		file_manager.top++;
   	}
