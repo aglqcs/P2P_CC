@@ -7,11 +7,11 @@
 #include <netinet/in.h>
 #include "flow_control.h"
 
-extern data_packet_list_t* send_data(int sockfd);
-extern void init_datalist(int sockfd, char *content);
-extern data_packet_list_t* recv_data(data_packet_t *packet, int sockfd);
-extern void init_recv_buffer(int sockfd, int offset);
-extern data_packet_list_t* handle_ack(int sockfd , int ack_number);
+extern data_packet_list_t* send_data(int offset);
+extern void init_datalist(int offset, char *content);
+extern data_packet_list_t* recv_data(data_packet_t *packet, int offset);
+extern void init_recv_buffer(int offset);
+extern data_packet_list_t* handle_ack(int offset , int ack_number);
 extern recv_buffer_t *get_buffer_by_offset(int offset);
 extern int is_buffer_full(int offset);
 extern void copy_chunk_data(char *buffer, int offset, int chunkpos);
@@ -386,7 +386,7 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 				return NULL;
 			}
 			printf("DEBUG init recv_buffer with offset = %d\n", offset);
-			init_recv_buffer(sockfd, offset);
+			init_recv_buffer(offset);
 
 			data[20] = '\0';
 			if ( ret == NULL ){
@@ -417,17 +417,19 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 		hash[20] = '\0';
 
 		char *data = get_data_from_hash(hash, config);
-		
+		int offset = get_off_set_from_master_chunkfile(hash, config);
+
 		/* init the flow control machine for sending back the data */
-		init_datalist(sockfd,data);
+		init_datalist(offset,data);
 		/* and call the first send */
-		data_packet_list_t *ret = send_data(sockfd);
+		data_packet_list_t *ret = send_data(offset);
 
 		return ret;
 	}
 	else if ( packet->header.packet_type == 3 ){
 		/* if the incoming packet is an DATA packet */
-		data_packet_list_t *ret = recv_data(packet, sockfd);
+		int offset = packet->header.ack_num;
+		data_packet_list_t *ret = recv_data(packet, offset);
 		
 		/* this datapacket may be the last packet, check if it is then write back to disk */
 		/*
@@ -443,7 +445,8 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 	}
 	else if( packet->header.packet_type == 4){
 		/* if the incoming packet is an ACK packet */
-		data_packet_list_t *ret = handle_ack(sockfd , packet->header.ack_num);
+		int offset = packet->header.seq_num;
+		data_packet_list_t *ret = handle_ack(offset , packet->header.ack_num);
 		return ret;
 	}
 	else{

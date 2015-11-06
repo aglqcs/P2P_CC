@@ -14,7 +14,7 @@
 
 
 typedef struct data{
-	int sockfd;
+	int offset;
 	char *content; // 512 * 1024 byte data
 	char state[CHUNK_PACKET_NUMBER];
 	int send_window;
@@ -40,7 +40,6 @@ typedef struct data_chunk{
 
 
 typedef struct recv_buffer{
-	int sockfd;
 	int expected;
 	int offset;
 	data_chunk_t chunks[CHUNK_PACKET_NUMBER];

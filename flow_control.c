@@ -13,13 +13,13 @@ recv_buffer_list_t *recv_list = NULL;
 /*
 	start functions for sender side
 */
-void init_datalist(int sockfd, char *content){
+void init_datalist(int offset, char *content){
 	/* this function receive the data from packet.c(from master data file) and separate them into chunks */
 	data_list_t *new_element = (data_list_t *)malloc(sizeof(data_list_t));
 	new_element->data = (data_t *)malloc(sizeof(data_t));
 	new_element->data->content = content;
 
-	new_element->data->sockfd = sockfd;
+	new_element->data->offset = offset;
 
 	/* init the congestion control variable */
 	new_element->data->send_window = 4;
@@ -51,30 +51,23 @@ char* get_content_by_index(data_t *data, int index){
 	return content;
 }
 
-data_t* get_data_by_sockfd(int sockfd){
+data_t* get_data_by_offset(int offset){
 	data_list_t *p;
 	for( p = list; p != NULL; p = p->next){
-		int find = 1;
-		int i;
-		for( i = 0; i < 20; i ++){
-			if( sockfd != p->data->sockfd) {
-				find = -1;
-				break;
-			}
-		}
-		if(find == 1){
+		if( offset == p->data->offset){
 			return p->data;
 		}
+	
 	}
 	return NULL;
 }
 
-data_packet_list_t* send_data(int sockfd){
-	data_t *to_send = get_data_by_sockfd(sockfd);
+data_packet_list_t* send_data(int offset){
+	data_t *to_send = get_data_by_offset(offset);
 
 	data_packet_list_t* ret = NULL;
 	if( to_send == NULL ){
-		printf("in send_data(), can not locate data_t for hash [%d]\n", sockfd);
+		printf("in send_data(), can not locate data_t for offset [%d]\n", offset);
 		return NULL;
 	}
 
@@ -101,13 +94,14 @@ data_packet_list_t* send_data(int sockfd){
 
 			char *content = get_content_by_index(to_send, to_send->end);
 			data_packet_t *packet = init_packet(3, content, 1024);
-
+			printf("SEND DATA seq = %d, offset = %d\n", to_send->end, offset);
 			/* notice that write the seq number here */
 			/* notice that I do not change to the network bit sequence */
 			packet->header.seq_num = to_send->end;
 			to_send->state[to_send->end] = UNACKED;
 
 			/* notice that I need to know which hash chunk of the data belong to, so I add to ACK field*/
+			packet->header.ack_num = offset;
 
 			/* add the packet to the list */
 			if ( ret == NULL ){
@@ -127,10 +121,10 @@ data_packet_list_t* send_data(int sockfd){
 	return ret;
 }
 
-data_packet_list_t* handle_ack(int sockfd , int ack_number){
-	data_t *to_send = get_data_by_sockfd(sockfd);
+data_packet_list_t* handle_ack(int offset , int ack_number){
+	data_t *to_send = get_data_by_offset(offset);
 	if( to_send == NULL ){
-		printf("in handle_ack(), can not locate data_t for hash [%d]\n", sockfd);
+		printf("in handle_ack(), can not locate data_t for offset [%d]\n", offset);
 		return NULL;
 	}
 	int i;
@@ -144,7 +138,7 @@ data_packet_list_t* handle_ack(int sockfd , int ack_number){
 	to_send->start = ack_number;
 	printf("DEBUG : recv Ack over, window start = %d window end = %d\n", to_send->start, to_send->end);
 	/* Since the window size changed, we have a possibility to send more data, so call send_data() here */
-	return send_data(sockfd);
+	return send_data(offset);
 }
 
 
@@ -153,13 +147,12 @@ data_packet_list_t* handle_ack(int sockfd , int ack_number){
 	start functions for recver side
 */
 
-void init_recv_buffer(int sockfd, int offset){
+void init_recv_buffer(int offset){
 	int i;
 	printf("DEBUG initing offset = %d\n", offset);
 	recv_buffer_list_t *new_element = (recv_buffer_list_t *)malloc( sizeof(recv_buffer_list_t));
 	new_element->buffer = (recv_buffer_t *)malloc( sizeof(recv_buffer_t));
 
-	new_element->buffer->sockfd = sockfd;
 	new_element->buffer->expected = 0;
 	new_element->buffer->offset = offset;
 	/*for(i = 0;i < 20; i ++){
@@ -183,14 +176,16 @@ void init_recv_buffer(int sockfd, int offset){
 }
 
 
-data_packet_list_t* recv_data(data_packet_t *packet, int sockfd){
-	int seq = packet->header.seq_num;
+data_packet_list_t* recv_data(data_packet_t *recv_packet, int offset){
+	int seq = recv_packet->header.seq_num;
+	printf("RECV DATA seq = %d offset = %d\n", seq, offset);
+
 	recv_buffer_list_t *head;
 	data_packet_list_t *ret = NULL;
 	int find = 0;
 	for( head = recv_list ; head != NULL; head = head->next ){
 	// loop all the list and find the correct data buffer
-		if( head->buffer->sockfd == sockfd ){
+		if( head->buffer->offset == offset ){
 			find = 1;
 			int i;
 
@@ -199,9 +194,8 @@ data_packet_list_t* recv_data(data_packet_t *packet, int sockfd){
 			/* if never saw this part before, write it to memory*/
 			if( head->buffer->chunks[seq].recved == FALSE){
 				head->buffer->chunks[seq].recved = TRUE;
-				printf("DEBUG modify recved = true i = %d addr = %d\n", seq, &head->buffer);
   				for(i = 0;i < 1024; i ++){
-  					head->buffer->chunks[seq].content[i] = packet->data[i];
+  					head->buffer->chunks[seq].content[i] = recv_packet->data[i];
   				}
 			}
 
@@ -211,6 +205,8 @@ data_packet_list_t* recv_data(data_packet_t *packet, int sockfd){
 			}
 
 			data_packet_t *packet = init_packet(4, NULL, 0);
+			/* notice that the sender should know the offset of the ACK, since seq is not used in packet*/
+			packet->header.seq_num = offset;
 
 			/* loop the data structure and find the highest continue "recved" data */
 			for(i = head->buffer->expected; i < 1024; i ++){
