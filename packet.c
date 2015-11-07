@@ -291,6 +291,8 @@ char* get_data_from_hash(char *hash , bt_config_t* config){
 	FILE *content = fopen(content_path, "r");
 	fseek(content, 512 * 1024 * index, SEEK_SET );
 	fread(data,512 * 1024, 1, content);
+
+
 	fclose(content);
 	fclose(fp);
 
