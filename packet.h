@@ -37,8 +37,6 @@ typedef struct chunk_owner_list{
 } chunk_owner_list_t;
 
 
-
-
 data_packet_t *init_packet(char type, char *data);
 int read_chunkfile(char * chunkfile, char *ret);
 data_packet_t *build_packet_from_buf(char *buf);

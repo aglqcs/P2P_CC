@@ -78,6 +78,7 @@ void process_inbound_udp(int sock) {
   data_packet_t *packet = build_packet_from_buf(buf);
  
   /* next parse this packet and build the response packet*/
+  /* NEW: add parameter socket address from the one who send the packet */
   data_packet_list_t *response_list = handle_packet(packet, &config, &from, c_list);
 
   /* finally call spiffy_sendto() to send back the packet*/

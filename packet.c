@@ -58,8 +58,8 @@ int read_chunkfile(char * chunkfile, char *data){
 
   	}
   	data[count] = '\0';
-  	fclose(fp);
-	return count;  	
+    fclose(fp);
+    return count;  	
 }
 data_packet_t *init_packet(char type, char *data){
 /*	This function write the packet header and data and return a packet object
@@ -82,7 +82,6 @@ data_packet_t *init_packet(char type, char *data){
     packet->header.packet_type = type;
     packet->header.header_len = 16;
 	packet->header.packet_len = data_length + 16;
-
 
 	/* if type == WHOHAS || IHAVE , ignore the seq_num and ack_num */
 	/* !! notice that I will not fill seq and ack here in this function but in the flow_control.c*/
@@ -213,7 +212,7 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, st
 		char data[1500];
 		memset(data, 0 ,1500);
 		int reply_count = 0;
-
+        int find = 0;
 		char * chunkfile = config->has_chunk_file;
 		if ( read_chunkfile(chunkfile, local_has) < 0 ){
 			printf("Can not locate local chunkfile = %s\n", chunkfile);
@@ -271,6 +270,7 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, st
 
 			// init the recv list
 			init_recv_buffer(sockfd);
+
             // Update the chunk owner list
             if(add_to_chunk_owner_list(addr, c_list, data) == -1){
                 printf("Error: can't add peer to chunk_owner_list\n");
