@@ -197,7 +197,7 @@ char* get_data_from_hash(char *hash , bt_config_t* config){
 	return data;
 }
 
-data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, struct sockaddr_in* addr, chunk_owner_list_t* c_list){
+data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, int sockfd, struct sockaddr_in* addr, chunk_owner_list_t* c_list){
 	/*	read a incoming packet, 
 		return a list of response packets
 	*/
@@ -212,7 +212,6 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, st
 		char data[1500];
 		memset(data, 0 ,1500);
 		int reply_count = 0;
-        int find = 0;
 		char * chunkfile = config->has_chunk_file;
 		if ( read_chunkfile(chunkfile, local_has) < 0 ){
 			printf("Can not locate local chunkfile = %s\n", chunkfile);
@@ -285,7 +284,6 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, st
                 printf("First owner with this chunk\n");
                 struct sockaddr_in* o_addr = get_chunk_owner(data, c_list);
                 // Print the list after update chunk_owner_list
-                print_list(c_list);
                 spiffy_sendto(sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *) &o_addr, sizeof(struct sockaddr));
                 continue;
             }
@@ -477,15 +475,4 @@ struct sockaddr_in* get_chunk_owner(char* data, chunk_owner_list_t* c_list){
     return dest_node->list[dest_node->chosen_node_idx];
 }
 
-/* Test print chunk_owner_list */
-void print_list(chunk_owner_list_t* list){
-    printf("=========== PRINT CHUNK LIST ========\n");
-    chunk_owner_list_t *itr;
-    for(itr=list; itr!=NULL;itr=itr->next){
-        printf("== HASH: %s\n", itr->chunk_hash);
-        printf("== Number of nodes in list: %d\n", itr->highest_idx+1);
-        printf("== Chose node IDX: %d\n", itr->chosen_node_idx);
-        printf("+++++++++++++++++++++++++++++++++\n");
-    }
-}
 

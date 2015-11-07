@@ -1,10 +1,7 @@
 /*
 	TODO:  maintain data structure for chunk and implement sliding window and flow control
 */
-#include <stdio.h>
-#include <stdlib.h>
 #include "flow_control.h"
-#include "packet.h"
 
 data_list_t *list = NULL;
 recv_buffer_list_t *recv_list = NULL;
@@ -24,6 +21,7 @@ void init_datalist(int sockfd, char *content){
 	new_element->data->ssthresh = 8;
 	new_element->data->congestion_control_state = SLOWSTART;
 	new_element->data->start = new_element->data->end = -1;
+    new_element->data->increase_rate = 1;
 
 	int i;
 	for( i = 0; i < CHUNK_PACKET_NUMBER; i ++){
@@ -216,10 +214,139 @@ data_packet_list_t* recv_data(data_packet_t *packet, int sockfd){
 	return ret;
 }
 
-/* Below is congestion control */
-void slow_start(data_list_t* d){
-   
-    d->send_window += 1;
-
+/* Timer control */
+packet_tracker_t* create_timer(packet_tracker_t *p_tracker, data_packet_t *packet){
+    if(p_tracker == NULL){
+        p_tracker = (packet_tracker_t *)malloc(sizeof(packet_tracker_t));
+        p_tracker->send_time = time(NULL);
+        p_tracker->packet = packet;
+        p_tracker->next = NULL:
+        return p_tracker;
+    }
+    else{
+        packet_tracker_t *itr = p_tracker;
+        pacekt_tracker_t *pre = NULL:
+        while(itr != NULL){
+            if(itr->packet == packet){
+                printf("Timer for packet already exist\n");
+                return NULL;
+            }
+            pre = itr;
+            itr = itr.next;
+        }
+        // Create new packet_tracker
+        itr = (packet_tracker_t *)malloc(sizeof(packet_tracker_t));
+        itr->send_time = time(NULL);
+        itr->packet = packet;
+        itr->next = NULL;
+        pre->next = itr;
+        return itr;
+    }
 }
 
+/* Check whether timer for packet is expired */
+int timer_expired(packet_tracker_t *p_tracker){
+    time_t current_time = time(NULL);
+    double diff_t;
+    diff_t = difftime(current_time, p_tracker->send_time);
+    if(diff_t >= TIMEOUT){
+        p_tracker->expire_time += 1;
+        return -1;
+    }
+    return 0;
+}
+
+/* Update timer */
+void timer_update(packet_tracker_t *p_tracker){
+    p_tracker->send_time = time(NULL); 
+}
+
+/* Find packet_tracker */
+packet_tracker_t* find_packet_tracker(packet_tracker_t* p_tracker, data_packet_t* packet){
+    packet_tracker_t *itr = p_tracker;
+    while(itr != NULL){
+        if(itr->packet == packet){
+            return itr;
+        }
+        itr = itr.next;
+    }
+    // Not found
+    return NULL;
+}
+
+/* Discard packet tracker */
+int discard_tracker(packet_tracker_t* list, packet_tracker_t* object){
+    if(list == NULL || object == NULL){
+        printf("list or object not exist\n");
+        return -1;
+    }
+    packet_tracker_t *itr = list;
+    while(itr != NULL){
+        if(itr->packet == object->packet){
+            returnt 0;
+        }
+        itr = itr.next;
+    }
+    // Discard packet not found it packet_tracker list
+    return -1;
+}
+
+
+/* Below is congestion control */
+
+void congestion_control(data_list_t* d){
+    if(d == NULL){
+        return;
+    } 
+    if(d->data->congestion_control_state == SLOWSTART){
+        // sending window reaches max value
+        if(d->data->ssthresh == d->data->send_window){
+            d->data->congestion_control_state = CON_AVOID;
+            d->data->increase_rate = 0;
+        }
+        else{
+            d->data->send_window += 1;
+        }
+    }
+    else if(d->data->congestion_control_state == CON_AVOID){
+        float cur_rate = 1/(float)d->data->send_window;
+        d->data->increase_rate += cur_rate;
+        if(d->data->increase_rate >= 1){
+            d->data->send_window += 1;
+            d->data->increase_rate = 0;
+        }
+    }
+}
+
+/* 
+ * Check if return packet is duplicate,
+ * if not, change prev_ack to newest_return ack
+ * else change congestion statsu to FAST_RETRANSMIT
+ * If duplicate ack num is 3, send the packet again.
+ */
+
+int check_return_ack(data_list_t* d, data_packet_t* packet){
+    if(packet->packet_type != 4){
+        printf("packet type is not ack\n");
+        return -1;
+    }
+    if(d->data->prev_ack == packet->ack_num){
+        d->data->count_ack += 1;
+        if(d->data->count_ack >= 3)
+            return 1;
+    }
+    else{
+        d->data->count_ack = 0;
+        d->data->prev_ack = packet->ack_num;
+    }
+    return 0;
+}
+
+/* Deal with packet loss */
+
+void process_packet_loss(data_list_t *d){
+    d->data->ssthresh = d->data->send_window/2;
+    d->data->send_window = 1;
+    d->data->congestion_control_state = SLOWSTART;
+    d->data->increase_rate = 1;
+}

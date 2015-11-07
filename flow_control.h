@@ -1,3 +1,10 @@
+#ifndef FLOW_CONTROL_H
+#define FLOW_CONTROL_H
+
+#include <time.h>
+#include "packet.h"
+#include <stdio.h>
+#include <stdlib.h>
 
 #define CHUNK_PACKET_NUMBER 512
 
@@ -12,7 +19,7 @@
 #define TRUE 1
 #define FALSE 0
 
-#define TIMER 5
+#define TIMEOUT 3
 
 typedef struct data{
 	int sockfd;
@@ -21,6 +28,9 @@ typedef struct data{
 	int send_window;
  	int ssthresh;
   	char congestion_control_state;
+    float increase_rate;
+    u_int prev_ack;
+    int count_ack;
   	int start;
   	int end;
 } data_t;  
@@ -58,4 +68,15 @@ typedef struct packet_tracker{
     data_packet_t *packet;
     struct packet_tracker *next;
 } packet_tracker_t;
+
+
+
+packet_tracker_t* create_timer(packet_tracker_t *p_tracker, data_packet_t *packet);
+packet_tracker_t* find_packet_tracker(packet_tracker_t* p_tracker, data_packet_t* packet);
+int discard_tracker(packet_tracker_t* list, packet_tracker_t* object);
+void congestion_control(data_list_t* d);
+void process_packet_loss(data_list_t *d);
+int check_return_ack(data_list_t* d, data_packet_t* packet);
+
+#endif
 

@@ -21,6 +21,7 @@
 #include "bt_parse.h"
 #include "input_buffer.h"
 #include "packet.h"
+#include "flow_control.h"
 
 void peer_run(bt_config_t *config);
 void broadcast(data_packet_t *packet, bt_config_t *config);
@@ -31,7 +32,7 @@ int sock;
 chunk_owner_list_t* c_list = NULL;
 
 /* packet_tracker_t for tracking the timer of sending packet */
-packet_tracker_t *p_tracker = NULL:
+packet_tracker_t *p_tracker = NULL;
 
 
 int main(int argc, char **argv) {
