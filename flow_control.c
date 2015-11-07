@@ -215,3 +215,11 @@ data_packet_list_t* recv_data(data_packet_t *packet, int sockfd){
 	}
 	return ret;
 }
+
+/* Below is congestion control */
+void slow_start(data_list_t* d){
+   
+    d->send_window += 1;
+
+}
+

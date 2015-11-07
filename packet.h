@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 
 #define PACKETLEN 1500
+#define TIMEOUT 5
 
 typedef struct header_s {
   short magicnum;
@@ -34,6 +35,8 @@ typedef struct chunk_owner_list{
     int chosen_node_idx;
     struct chunk_owner_list *next;
 } chunk_owner_list_t;
+
+
 
 
 data_packet_t *init_packet(char type, char *data);

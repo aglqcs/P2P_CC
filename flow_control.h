@@ -12,6 +12,7 @@
 #define TRUE 1
 #define FALSE 0
 
+#define TIMER 5
 
 typedef struct data{
 	int sockfd;
@@ -50,3 +51,11 @@ typedef struct recv_buffer_list{
 	recv_buffer_t *buffer;
 	struct recv_buffer_list *next;
 }recv_buffer_list_t;
+
+// This is use to track every packet you send and use for flow control
+typedef struct packet_tracker{
+    time_t send_time;
+    data_packet_t *packet;
+    struct packet_tracker *next;
+} packet_tracker_t;
+

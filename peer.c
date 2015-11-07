@@ -26,8 +26,13 @@ void peer_run(bt_config_t *config);
 void broadcast(data_packet_t *packet, bt_config_t *config);
 bt_config_t config;
 int sock;
+
 /* Chunk owner list Declair, type define at packet.h */
 chunk_owner_list_t* c_list = NULL;
+
+/* packet_tracker_t for tracking the timer of sending packet */
+packet_tracker_t *p_tracker = NULL:
+
 
 int main(int argc, char **argv) {
 
@@ -129,6 +134,8 @@ void peer_run(bt_config_t *config) {
   fd_set readfds;
   struct user_iobuf *userbuf;
   
+  FD_ZERO(&readfds);
+
   if ((userbuf = create_userbuf()) == NULL) {
     perror("peer_run could not allocate userbuf");
     exit(-1);
