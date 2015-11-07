@@ -26,6 +26,19 @@ void peer_run(bt_config_t *config);
 bt_config_t config;
 int sock;
 
+data_packet_list_t* reverseList(data_packet_list_t* head)
+{
+    data_packet_list_t* cursor = NULL;
+    data_packet_list_t* next;
+    while (head)
+    {
+        next = head->next;
+        head->next = cursor;
+        cursor = head;
+        head = next;
+    }
+    return cursor;
+}
 
 /* Broadcast WHOHAS request to all node except myself */
 void broadcast(data_packet_t *packet, bt_config_t *config){
@@ -102,9 +115,9 @@ void process_inbound_udp(int sock) {
   }
   else{
     data_packet_list_t *head;
+    response_list = reverseList(response_list);
     for( head = response_list; head != NULL; head = head->next ){
       data_packet_t *packet = head->packet;
-      /* TODO: send back this packet */
       if( packet->header.packet_type == 3  ){
         printf("DEBUG : send packet with type = DATA seq = %d\n", packet->header.seq_num);
       }
@@ -126,6 +139,7 @@ void process_get(char *chunkfile, char *outputfile) {
     printf("can not generate a packet\n");
     return;
   }
+  whohas_list = reverseList(whohas_list);
   data_packet_list_t *head;
   for( head = whohas_list; head != NULL; head = head->next){
     data_packet_t *packet = head->packet;
