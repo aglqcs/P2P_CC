@@ -21,13 +21,24 @@
 #include "bt_parse.h"
 #include "input_buffer.h"
 #include "packet.h"
+#include "flow_control.h"
+#include <time.h>
+
+
+
+extern packet_tracker_t* create_timer(packet_tracker_t *p_tracker, data_packet_t *packet, int sock, struct sockaddr_in *from);;
+extern int timer_expired(packet_tracker_t *p_tracker);
+extern void process_packet_loss(int offset);
+
 
 void peer_run(bt_config_t *config);
 bt_config_t config;
 int sock;
 
-data_packet_list_t* reverseList(data_packet_list_t* head)
-{
+packet_tracker_t *p_tracker = NULL;
+
+
+data_packet_list_t* reverseList(data_packet_list_t* head){
     data_packet_list_t* cursor = NULL;
     data_packet_list_t* next;
     while (head)
@@ -106,7 +117,7 @@ void process_inbound_udp(int sock) {
   data_packet_t *packet = build_packet_from_buf(buf);
 
   /* next parse this packet and build the response packet*/
-  data_packet_list_t *response_list = handle_packet(packet, &config, sock);
+  data_packet_list_t *response_list = handle_packet(packet, &config, sock, p_tracker);
 
   /* finally call spiffy_sendto() to send back the packet*/
   if( NULL == response_list ){
@@ -118,13 +129,37 @@ void process_inbound_udp(int sock) {
     response_list = reverseList(response_list);
     for( head = response_list; head != NULL; head = head->next ){
       data_packet_t *packet = head->packet;
-      if( packet->header.packet_type == 3  ){
-        printf("DEBUG : send packet with type = DATA seq = %d\n", packet->header.seq_num);
+      
+      if( packet->header.packet_type == 3 ){
+        printf("DEBUG : SEND DATA SEQ = %d\n", packet->header.seq_num);
       }
-      if(packet->header.packet_type == 4){
-        printf("DEBUG : send packet with type = ACK ack = %d\n", packet->header.ack_num);
+       if( packet->header.packet_type == 4 ){
+        printf("DEBUG : SEND ACK ACK = %d\n", packet->header.ack_num);
       }
-      spiffy_sendto(sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *) &from, sizeof(struct sockaddr));
+      int r = rand();
+      if( r % 20 == 1){
+        fprintf(stderr,"RANDOM DISCARD THIS PACKET");
+        return;
+      }
+      /* check timer if already send and within timeout , then dont send */
+      packet_tracker_t *head;
+      int find = 0;
+      for( head = p_tracker ; head != NULL ;head = head->next ){
+        if( head->packet->header.seq_num == packet->header.seq_num && head->packet->header.ack_num == packet->header.ack_num){
+          if( -1 == timer_expired(head) ){
+            find = 1;
+          }
+        }
+      }
+      if( find == 0){
+          spiffy_sendto(sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *) &from, sizeof(struct sockaddr));
+          if( packet->header.packet_type == 3){
+            printf("=======================\n");
+            p_tracker = create_timer(p_tracker, packet, sock, &from);
+            printf("=======================\n");
+          }
+
+      }
     }
   }
 }
@@ -166,7 +201,10 @@ void peer_run(bt_config_t *config) {
   struct sockaddr_in myaddr;
   fd_set readfds;
   struct user_iobuf *userbuf;
-  
+  struct timeval tv;
+  tv.tv_sec = 3;
+  tv.tv_usec = 0;
+
   if ((userbuf = create_userbuf()) == NULL) {
     perror("peer_run could not allocate userbuf");
     exit(-1);
@@ -194,7 +232,7 @@ void peer_run(bt_config_t *config) {
     FD_SET(STDIN_FILENO, &readfds);
     FD_SET(sock, &readfds);
     
-    nfds = select(sock+1, &readfds, NULL, NULL, NULL);
+    nfds = select(sock+1, &readfds, NULL, NULL, &tv);
     
     if (nfds > 0) {
       if (FD_ISSET(sock, &readfds)) {
@@ -204,6 +242,22 @@ void peer_run(bt_config_t *config) {
       if (FD_ISSET(STDIN_FILENO, &readfds)) {
 	process_user_input(STDIN_FILENO, userbuf, handle_user_input,
 			   "Currently unused");
+      }
+    }
+
+    /* loop all the data packet send and check if packet timeout*/
+    packet_tracker_t *head;
+    for( head = p_tracker ; head != NULL ;head = head->next ){
+      if( -1 == timer_expired(head) ){
+        /* retransmit*/
+        data_packet_t *packet = head->packet;
+        printf("DEBUG timer out seq = %d\n", packet->header.seq_num);
+
+        spiffy_sendto(head->sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *)head->from, sizeof(struct sockaddr));
+        printf("spiffy send to success\n");
+        /* reduce the ssthresh */
+        process_packet_loss( head->packet->header.ack_num );
+        head->send_time = time(NULL);
       }
     }
   }

@@ -11,7 +11,7 @@ extern data_packet_list_t* send_data(int offset);
 extern void init_datalist(int offset, char *content);
 extern data_packet_list_t* recv_data(data_packet_t *packet, int offset);
 extern void init_recv_buffer(int offset);
-extern data_packet_list_t* handle_ack(int offset , int ack_number);
+extern data_packet_list_t* handle_ack(int offset , int ack_number, packet_tracker_t *p_tracker);
 extern recv_buffer_t *get_buffer_by_offset(int offset);
 extern int is_buffer_full(int offset);
 extern void copy_chunk_data(char *buffer, int offset, int chunkpos);
@@ -288,7 +288,9 @@ char* get_data_from_hash(char *hash , bt_config_t* config){
 		memset(local, 0 ,20);
 	}
 	printf("in Master file offset = %d\n", index);
-	FILE *content = fopen(content_path, "r");
+
+	/* try rb instead of r*/
+	FILE *content = fopen(content_path, "r");  
 	fseek(content, 512 * 1024 * index, SEEK_SET );
 	fread(data,512 * 1024, 1, content);
 
@@ -299,7 +301,7 @@ char* get_data_from_hash(char *hash , bt_config_t* config){
 	return data;
 }
 
-data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, int sockfd){
+data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, int sockfd,packet_tracker_t *p_tracker){
 	/*	read a incoming packet, 
 		return a list of response packets
 	*/
@@ -448,7 +450,7 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 	else if( packet->header.packet_type == 4){
 		/* if the incoming packet is an ACK packet */
 		int offset = packet->header.seq_num;
-		data_packet_list_t *ret = handle_ack(offset , packet->header.ack_num);
+		data_packet_list_t *ret = handle_ack(offset , packet->header.ack_num, p_tracker);
 		return ret;
 	}
 	else{

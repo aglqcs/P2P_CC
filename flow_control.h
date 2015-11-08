@@ -1,4 +1,5 @@
 
+
 #define CHUNK_PACKET_NUMBER 512
 
 #define UNSEND 1
@@ -12,6 +13,7 @@
 #define TRUE 1
 #define FALSE 0
 
+#define TIMEOUT 3
 
 typedef struct data{
 	int offset;
@@ -22,6 +24,9 @@ typedef struct data{
   	char congestion_control_state;
   	int start;
   	int end;
+  	float increase_rate;
+  	u_int prev_ack;
+  	int count_ack;
 } data_t;  
 
 
@@ -58,4 +63,9 @@ typedef struct File_manager{
 	int *offset;
 	int top;
 } file_manager_t;
+
+
+
+
+
 
