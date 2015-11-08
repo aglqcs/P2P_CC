@@ -281,10 +281,18 @@ int discard_tracker(packet_tracker_t* list, packet_tracker_t* object){
         return -1;
     }
     packet_tracker_t *itr = list;
+    packet_tracker_t *pre = NULL:
     while(itr != NULL){
         if(itr->packet == object->packet){
+            if(pre == NULL){
+                list = itr->next;
+            }
+            else{
+                pre->next = itr->next;
+            }
             returnt 0;
         }
+        pre = itr;
         itr = itr.next;
     }
     // Discard packet not found it packet_tracker list
