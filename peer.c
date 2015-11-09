@@ -149,7 +149,7 @@ void process_inbound_udp(int sock) {
       }
       if( find == 0){
            int r = rand();
-         if( r % 20 < 1 &&( packet->header.packet_type == 3 || packet->header.packet_type == 4)){
+         if( r % 20 < -1 &&( packet->header.packet_type == 3 || packet->header.packet_type == 4)){
            fprintf(stderr,"RANDOM DISCARD THIS PACKET\n");
          }
          else{

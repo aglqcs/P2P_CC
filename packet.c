@@ -40,7 +40,7 @@ int check_file_manager(bt_config_t* config){
 	if( file_manager.init == 0){
 		return -2;
 	}
-	
+
 	printf("DEBUG: GO into file_manager, chunkcount = %d\n", file_manager.chunk_count);
 	int i;
 
@@ -79,6 +79,7 @@ int check_file_manager(bt_config_t* config){
 			fwrite(temp,1, 1024,fp);
 			memset(temp, 0 , 1024);
 		}
+		
 	}
 	printf("GET FILE\n");
 
@@ -167,7 +168,7 @@ data_packet_t *init_packet(char type, char *data, int length){
 	else{
 		// write datafield for other packet type
 		if( data != NULL )
-			memcpy(packet->data, data, strlen(data));
+			memcpy(packet->data, data, length);
 
 	}
 	packet->header.magicnum = htons(packet->header.magicnum);
@@ -450,6 +451,7 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 		/* init the flow control machine for sending back the data */
 		init_datalist(offset,data);
 		/* and call the first send */
+
 		data_packet_list_t *ret = send_data(offset);
 
 		return ret;

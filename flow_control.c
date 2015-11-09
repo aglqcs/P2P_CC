@@ -85,7 +85,7 @@ data_t* get_data_by_offset(int offset){
 }
 
 data_packet_list_t* send_data(int offset){
-	data_t *to_send = get_data_by_offset(offset);
+	data_t *to_send = get_data_by_offset(offset);	
 
 	data_packet_list_t* ret = NULL;
 	if( to_send == NULL ){
@@ -422,6 +422,7 @@ void copy_chunk_data(char *buffer, int offset, int chunkpos){
 			}
 		}
 	}
+	
 }
 
 int is_buffer_full(int offset){
