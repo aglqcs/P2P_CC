@@ -37,6 +37,10 @@ typedef struct data_packet {
 file_manager_t file_manager;
 
 int check_file_manager(bt_config_t* config){
+	if( file_manager.init == 0){
+		return -2;
+	}
+	
 	printf("DEBUG: GO into file_manager, chunkcount = %d\n", file_manager.chunk_count);
 	int i;
 
@@ -77,6 +81,9 @@ int check_file_manager(bt_config_t* config){
 		}
 	}
 	printf("GET FILE\n");
+
+	/* close the file_manager */
+	file_manager.init = 0;
 	fclose(fp);
 	
 	return 1;
@@ -290,13 +297,13 @@ char* get_data_from_hash(char *hash , bt_config_t* config){
 	printf("in Master file offset = %d\n", index);
 
 	/* try rb instead of r*/
-	FILE *content = fopen(content_path, "r");  
+	FILE *content = fopen(content_path, "rb");  
 	fseek(content, 512 * 1024 * index, SEEK_SET );
-	fread(data,1, 512 * 1024, content);
+	fread(data,512 * 1024, 1, content);
 
 
-	FILE *newfile = fopen("/tmp/fuck", "w");
-	fwrite(content,1,1024 * 512, newfile);
+	FILE *newfile = fopen("/tmp/fuck", "wb");
+	fwrite(data,1024 * 512,1, newfile);
 
 	fclose(newfile);
 	fclose(content);

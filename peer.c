@@ -131,10 +131,10 @@ void process_inbound_udp(int sock) {
       data_packet_t *packet = head->packet;
       
       if( packet->header.packet_type == 3 ){
-        printf("DEBUG : SEND DATA SEQ = %d\n", packet->header.seq_num);
+        printf("DEBUG : SEND DATA SEQ = %d offset = %d\n", packet->header.seq_num, packet->header.ack_num);
       }
        if( packet->header.packet_type == 4 ){
-        printf("DEBUG : SEND ACK ACK = %d\n", packet->header.ack_num);
+        printf("DEBUG : SEND ACK ACK = %d offset = %d\n", packet->header.ack_num, packet->header.seq_num);
       }
      
       /* check timer if already send and within timeout , then dont send */
@@ -154,24 +154,14 @@ void process_inbound_udp(int sock) {
          }
          else{
           int p = spiffy_sendto(sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *) &from, sizeof(struct sockaddr));
-            printf("NOMRAL SEND TO %d %d %d\n", p, sock, &from);
-    
-           printf("ADDR DETAIL = %d, %d\n", from.sin_addr.s_addr, from.sin_port);
+
 
           }
           if( packet->header.packet_type == 3){
-            printf("=======================\n");
             p_tracker = create_timer(p_tracker, packet, sock, &from);
-            printf("=======================\n");
 
             packet_tracker_t *p = p_tracker;
-            printf("------------------AFTER CREATE TIMER----------------\n");
-            while( p!= NULL){
-                printf("%d - ",p->packet->header.seq_num);
-                p = p->next;
 
-            }
-            printf("\n------------------AFTER CREATE TIMER----------------\n");
 
           }
 
@@ -271,10 +261,8 @@ void peer_run(bt_config_t *config) {
         if( packet->header.seq_num == -441) 
           continue; 
 
-        printf("DEBUG timer out seq = %d\n", packet->header.seq_num);
+        printf("DEBUG timer out seq = %d offset = %d\n", packet->header.seq_num, packet->header.ack_num);
         int p = spiffy_sendto(head->sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *)head->from, sizeof(struct sockaddr));
-        printf("ERROR SEND TO %d %d %d", p, sock, head->from);
-        printf("ADDR DETAIL = %d, %d\n", head->from->sin_addr.s_addr, head->from->sin_port);
 
         /* reduce the ssthresh */
         process_packet_loss( head->packet->header.ack_num );

@@ -108,7 +108,7 @@ data_packet_list_t* send_data(int offset){
 			/* make sure we do not reach the outside of the available data*/
 			if( to_send->end >= CHUNK_PACKET_NUMBER - 1){
 				printf("last packet already sent\n");
-				return ret;
+				return NULL;
 			}
 
 			to_send->end ++;
@@ -228,25 +228,31 @@ data_packet_list_t* handle_ack(int offset , int ack_number, packet_tracker_t *p_
 		printf("in handle_ack(), can not locate data_t for offset [%d]\n", offset);
 		return NULL;
 	}
+	if(ack_number >= CHUNK_PACKET_NUMBER ){
+		return NULL;
+	}
 	if( 1 == check_return_ack(to_send, ack_number) ){
 		/* 3 duplicate fast re-transmit */
 		printf("3 Duplicate ACK = %d\n", ack_number);
-		char *content = get_content_by_index(to_send, ack_number + 1);
-		data_packet_t *packet = init_packet(3, content, 1024);
-		/* dont forget write seq and offset*/
-		packet->header.seq_num = ack_number + 1;
-		packet->header.ack_num = offset;
-		process_packet_loss(offset);
+		if( ack_number < CHUNK_PACKET_NUMBER - 1){
+			char *content = get_content_by_index(to_send, ack_number + 1);
+			data_packet_t *packet = init_packet(3, content, 1024);
+			/* dont forget write seq and offset*/
+			packet->header.seq_num = ack_number + 1;
+			packet->header.ack_num = offset;
+			process_packet_loss(offset);
 
-		data_packet_list_t* ret = (data_packet_list_t *)malloc( sizeof(	data_packet_list_t));
-		ret->next = NULL;
-		ret->packet = packet;
-		return ret;
+			data_packet_list_t* ret = (data_packet_list_t *)malloc( sizeof(	data_packet_list_t));
+			ret->next = NULL;
+			ret->packet = packet;
+			return ret;
+		}
+		return NULL;
 	}
 
 	int i;
 
-	for(i = to_send->start + 1; i <= ack_number; i ++){
+	for(i = to_send->start + 1; i <= ack_number && i < CHUNK_PACKET_NUMBER; i ++){
 		if( to_send->state[i] == UNSEND){
 			printf("Should never happens, a packet not even send but got acked\n");
 			return NULL;
@@ -254,37 +260,11 @@ data_packet_list_t* handle_ack(int offset , int ack_number, packet_tracker_t *p_
 		if( to_send->state[i] != ACKED ){
 			to_send->state[i] = ACKED;
 			/* remove from p_trackerlist */
-			printf("KKKKKKK WILL DELETE %d\n",i);
-			printf("~~~~~~~~~~~~~~~~~~\n");
 
-			 packet_tracker_t *p = p_tracker;
-			 while( p != NULL ){
-			 	printf("%d - " , p->packet->header.seq_num);
-			 	p=p->next;
-			 }
-			 printf("\n~~~~~~~~~~~~~~~~~~\n");
 			 if( -1 == (remove_from_tracker(p_tracker, offset, i))){
 			 	printf("TRY to discard %d fail\n", i);
 			 }
-			 else{
-			 	printf("TRY to discard %d SUCCESS\n", i);
-
-			 }
-			 	printf("~~~~~~~~~~~~~~~~~~\n");
-
-			  p = p_tracker;
-			 while( p != NULL ){
-			 	printf("%d - " , p->packet->header.seq_num);
-			 	p=p->next;
-			 }
-			 printf("\n~~~~~~~~~~~~~~~~~~\n");
-			// if( NULL == (	p_tracker = remove_from_tracker(p_tracker, offset, i) )){
-			// 	printf("Unable to delete from p_tracker with offset = %d, seq = %d\n", offset, i);
-			// 	return NULL;
-			// }
-			// else{
-			// 	printf("-----------------\nDELETE from p_tracker with offset = %d, seq = %d\n----------------\n", offset, i);
-			// }
+		
 		}
 		else{
 			// it may be a duplicate message, do nothing
@@ -336,6 +316,9 @@ void init_recv_buffer(int offset){
 
 data_packet_list_t* recv_data(data_packet_t *recv_packet, int offset){
 	int seq = recv_packet->header.seq_num;
+	if( seq >= CHUNK_PACKET_NUMBER ){
+		return NULL;
+	}
 	printf("RECV DATA seq = %d offset = %d\n", seq, offset);
 
 	recv_buffer_list_t *head;
@@ -456,10 +439,13 @@ int is_buffer_full(int offset){
 			}
 		}
 	}
-	if ( find == -1)
+	if ( find == -1){
 		return -1;
-	else
+	}
+	else{
+		printf("is_buffer_full : buffer[%d] == FULL\n",offset);
 		return 1;
+	}
 }
 
 
