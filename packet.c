@@ -294,10 +294,23 @@ char* get_data_from_hash(char *hash , bt_config_t* config){
 	fseek(content, 512 * 1024 * index, SEEK_SET );
 	fread(data,1, 512 * 1024, content);
 
+    char *test = (char*)malloc(512);
+    test[0] = 1;
+    test[1] = '\0';
+
+
+    printf("[DEBUG] test's filesize: %d\n", (int)strlen(test));
+    printf("[DEBUG] data's filesize: %d\n", (int)strlen(data));
+
+    int fileSize = ftell(content);
+
+    printf("[DEBUG] filesize: %d bytes \n", fileSize);
 
 	FILE *newfile = fopen("/tmp/fuck", "w");
-	fwrite(content,1,1024 * 512, newfile);
+	fwrite(data, 512*1024, 1, newfile);
 
+    int len = ftell(newfile);
+    printf("[DEBUG] fuck's file size: %d\n", len);
 	fclose(newfile);
 	fclose(content);
 	fclose(fp);
