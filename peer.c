@@ -136,11 +136,7 @@ void process_inbound_udp(int sock) {
        if( packet->header.packet_type == 4 ){
         printf("DEBUG : SEND ACK ACK = %d\n", packet->header.ack_num);
       }
-      int r = rand();
-      if( r % 20 == 1){
-        fprintf(stderr,"RANDOM DISCARD THIS PACKET");
-        return;
-      }
+     
       /* check timer if already send and within timeout , then dont send */
       packet_tracker_t *head;
       int find = 0;
@@ -152,11 +148,27 @@ void process_inbound_udp(int sock) {
         }
       }
       if( find == 0){
+           int r = rand();
+         if( r % 20 == 1){
+           fprintf(stderr,"RANDOM DISCARD THIS PACKET");
+         }
+         else{
           spiffy_sendto(sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *) &from, sizeof(struct sockaddr));
+          }
           if( packet->header.packet_type == 3){
             printf("=======================\n");
             p_tracker = create_timer(p_tracker, packet, sock, &from);
             printf("=======================\n");
+
+            packet_tracker_t *p = p_tracker;
+            printf("------------------AFTER CREATE TIMER----------------\n");
+            while( p!= NULL){
+                printf("%d - ",p->packet->header.seq_num);
+                p = p->next;
+
+            }
+            printf("\n------------------AFTER CREATE TIMER----------------\n");
+
           }
 
       }
@@ -251,8 +263,11 @@ void peer_run(bt_config_t *config) {
       if( -1 == timer_expired(head) ){
         /* retransmit*/
         data_packet_t *packet = head->packet;
-        printf("DEBUG timer out seq = %d\n", packet->header.seq_num);
+        /* ignore dummy head */
+        if( packet->header.seq_num == -441) 
+          continue; 
 
+        printf("DEBUG timer out seq = %d\n", packet->header.seq_num);
         spiffy_sendto(head->sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *)head->from, sizeof(struct sockaddr));
         printf("spiffy send to success\n");
         /* reduce the ssthresh */

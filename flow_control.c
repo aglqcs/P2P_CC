@@ -203,22 +203,23 @@ packet_tracker_t* remove_from_tracker(packet_tracker_t* current, int offset, int
 	return current;
 }
 */
-void remove_from_tracker(packet_tracker_t* current, int offset, int seq){
-	if( current == NULL ) return ;
+int remove_from_tracker(packet_tracker_t* current, int offset, int seq){
+	if( current == NULL ) return -1;
 	if( current->packet->header.seq_num == seq && current->packet->header.ack_num == offset){
-		current = current->next;
-		return;
+		*current = *current->next;
+		return 1;
 	}
 	packet_tracker_t* prev = current;
 	packet_tracker_t* p = current->next;
 	while( p != NULL){
 		if( p->packet->header.seq_num == seq && p->packet->header.ack_num == offset){
 			prev->next = p->next;
-			return;			
+			return 1;			
 		}
 		p = p->next;
 		prev = prev->next;
 	}
+	return -1;
 }
 
 data_packet_list_t* handle_ack(int offset , int ack_number, packet_tracker_t *p_tracker){
@@ -253,7 +254,8 @@ data_packet_list_t* handle_ack(int offset , int ack_number, packet_tracker_t *p_
 		if( to_send->state[i] != ACKED ){
 			to_send->state[i] = ACKED;
 			/* remove from p_trackerlist */
-						 printf("~~~~~~~~~~~~~~~~~~\n");
+			printf("KKKKKKK WILL DELETE %d\n",i);
+			printf("~~~~~~~~~~~~~~~~~~\n");
 
 			 packet_tracker_t *p = p_tracker;
 			 while( p != NULL ){
@@ -261,8 +263,21 @@ data_packet_list_t* handle_ack(int offset , int ack_number, packet_tracker_t *p_
 			 	p=p->next;
 			 }
 			 printf("\n~~~~~~~~~~~~~~~~~~\n");
-			 printf("TRY to discard %d\n", i);
-remove_from_tracker(p_tracker, offset, i);
+			 if( -1 == (remove_from_tracker(p_tracker, offset, i))){
+			 	printf("TRY to discard %d fail\n", i);
+			 }
+			 else{
+			 	printf("TRY to discard %d SUCCESS\n", i);
+
+			 }
+			 	printf("~~~~~~~~~~~~~~~~~~\n");
+
+			  p = p_tracker;
+			 while( p != NULL ){
+			 	printf("%d - " , p->packet->header.seq_num);
+			 	p=p->next;
+			 }
+			 printf("\n~~~~~~~~~~~~~~~~~~\n");
 			// if( NULL == (	p_tracker = remove_from_tracker(p_tracker, offset, i) )){
 			// 	printf("Unable to delete from p_tracker with offset = %d, seq = %d\n", offset, i);
 			// 	return NULL;
@@ -461,17 +476,11 @@ packet_tracker_t* create_timer(packet_tracker_t *p_tracker, data_packet_t *packe
         p_tracker->from = from;
         p_tracker->expire_time = 0;
 
-        printf("+++++++++++++++++++++\n");
-		packet_tracker_t *p = p_tracker;
-		while( p != NULL ){
-		 	printf("%d - " , p->packet->header.seq_num);
-		 	p=p->next;
-	 	}
-        printf("\n+++++++++++++++++++++\n");
-
+        /* dummy head */
         packet_tracker_t *itr = (packet_tracker_t *)malloc(sizeof(packet_tracker_t));
         itr->packet = (data_packet_t *)malloc(sizeof(data_packet_t));
-        
+        itr->packet->header.seq_num = -441;
+
         itr->next = p_tracker;
         p_tracker = itr;
         return p_tracker;
@@ -486,16 +495,7 @@ packet_tracker_t* create_timer(packet_tracker_t *p_tracker, data_packet_t *packe
             if( itr->packet->header.seq_num == seq && itr->packet->header.ack_num == offset){
                 printf("Timer for packet = %d already exist\n", seq);
                 itr->send_time = time(NULL);
-
-        printf("+++++++++++++++++++++\n");
-		packet_tracker_t *p = p_tracker;
-		while( p != NULL ){
-		 	printf("%d - " , p->packet->header.seq_num);
-		 	p=p->next;
-	 	}
-        printf("\n+++++++++++++++++++++\n");
-
-                return itr;
+                return p_tracker;
             }
             pre = itr;
             itr = itr->next;
@@ -509,14 +509,6 @@ packet_tracker_t* create_timer(packet_tracker_t *p_tracker, data_packet_t *packe
         itr->from = from;
         itr->expire_time = 0;
         pre->next = itr;
-
-        printf("+++++++++++++++++++++\n");
-		packet_tracker_t *p = p_tracker;
-		while( p != NULL ){
-		 	printf("%d - " , p->packet->header.seq_num);
-		 	p=p->next;
-	 	}
-        printf("\n+++++++++++++++++++++\n");
 
         return p_tracker;
     }
