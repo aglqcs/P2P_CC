@@ -466,14 +466,20 @@ int is_buffer_full(int offset){
 /* Timer control */
 
 packet_tracker_t* create_timer(packet_tracker_t *p_tracker, data_packet_t *packet, int sock, struct sockaddr_in *from){
-    printf("Create TIMEer with seq = %d\n", packet->header.seq_num);
+    printf("Create TIMEer with seq = %d from = %d\n", packet->header.seq_num, from);
     if(p_tracker == NULL){
         p_tracker = (packet_tracker_t *)malloc(sizeof(packet_tracker_t));
         p_tracker->send_time = time(NULL);
         p_tracker->packet = packet;
         p_tracker->next = NULL;
         p_tracker->sock = sock;
-        p_tracker->from = from;
+       // p_tracker->from = from;
+        p_tracker->from = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
+        p_tracker->from->sin_family = from->sin_family;
+        p_tracker->from->sin_port = from->sin_port;
+        p_tracker->from->sin_addr.s_addr = from->sin_addr.s_addr;
+
+
         p_tracker->expire_time = 0;
 
         /* dummy head */
@@ -506,7 +512,12 @@ packet_tracker_t* create_timer(packet_tracker_t *p_tracker, data_packet_t *packe
         itr->packet = packet;
         itr->next = NULL;
         itr->sock = sock;
-        itr->from = from;
+     //   itr->from = from;
+  		itr->from = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
+        itr->from->sin_family = from->sin_family;
+        itr->from->sin_port = from->sin_port;
+        itr->from->sin_addr.s_addr = from->sin_addr.s_addr;
+
         itr->expire_time = 0;
         pre->next = itr;
 

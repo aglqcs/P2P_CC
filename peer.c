@@ -149,11 +149,15 @@ void process_inbound_udp(int sock) {
       }
       if( find == 0){
            int r = rand();
-         if( r % 20 == 1){
-           fprintf(stderr,"RANDOM DISCARD THIS PACKET");
+         if( r % 20 < 1 &&( packet->header.packet_type == 3 || packet->header.packet_type == 4)){
+           fprintf(stderr,"RANDOM DISCARD THIS PACKET\n");
          }
          else{
-          spiffy_sendto(sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *) &from, sizeof(struct sockaddr));
+          int p = spiffy_sendto(sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *) &from, sizeof(struct sockaddr));
+            printf("NOMRAL SEND TO %d %d %d\n", p, sock, &from);
+    
+           printf("ADDR DETAIL = %d, %d\n", from.sin_addr.s_addr, from.sin_port);
+
           }
           if( packet->header.packet_type == 3){
             printf("=======================\n");
@@ -268,8 +272,10 @@ void peer_run(bt_config_t *config) {
           continue; 
 
         printf("DEBUG timer out seq = %d\n", packet->header.seq_num);
-        spiffy_sendto(head->sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *)head->from, sizeof(struct sockaddr));
-        printf("spiffy send to success\n");
+        int p = spiffy_sendto(head->sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *)head->from, sizeof(struct sockaddr));
+        printf("ERROR SEND TO %d %d %d", p, sock, head->from);
+        printf("ADDR DETAIL = %d, %d\n", head->from->sin_addr.s_addr, head->from->sin_port);
+
         /* reduce the ssthresh */
         process_packet_loss( head->packet->header.ack_num );
         head->send_time = time(NULL);

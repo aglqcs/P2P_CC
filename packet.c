@@ -65,7 +65,7 @@ int check_file_manager(bt_config_t* config){
 	// here write back and return 1
 	printf("DEBUG: File is full, writing back to disk location = %s\n", config->output_file);
 	
-	FILE *fp = fopen(config->output_file, "w");
+	FILE *fp = fopen(config->output_file, "wb");
 	for(i = 0;i < file_manager.chunk_count; i ++){
 		int j;
 		char temp[1024];
@@ -292,9 +292,13 @@ char* get_data_from_hash(char *hash , bt_config_t* config){
 	/* try rb instead of r*/
 	FILE *content = fopen(content_path, "r");  
 	fseek(content, 512 * 1024 * index, SEEK_SET );
-	fread(data,512 * 1024, 1, content);
+	fread(data,1, 512 * 1024, content);
 
 
+	FILE *newfile = fopen("/tmp/fuck", "w");
+	fwrite(content,1,1024 * 512, newfile);
+
+	fclose(newfile);
 	fclose(content);
 	fclose(fp);
 
