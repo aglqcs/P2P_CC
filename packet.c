@@ -302,24 +302,6 @@ char* get_data_from_hash(char *hash , bt_config_t* config){
 	fseek(content, 512 * 1024 * index, SEEK_SET );
 	fread(data,512 * 1024, 1, content);
 
-    char *test = (char*)malloc(512);
-    test[0] = 1;
-    test[1] = '\0';
-
-
-    printf("[DEBUG] test's filesize: %d\n", (int)strlen(test));
-    printf("[DEBUG] data's filesize: %d\n", (int)strlen(data));
-
-    int fileSize = ftell(content);
-
-    printf("[DEBUG] filesize: %d bytes \n", fileSize);
-
-	FILE *newfile = fopen("/tmp/fuck", "w");
-	fwrite(data, 512*1024, 1, newfile);
-
-    int len = ftell(newfile);
-    printf("[DEBUG] fuck's file size: %d\n", len);
-	fclose(newfile);
 	fclose(content);
 	fclose(fp);
 
@@ -572,5 +554,92 @@ data_packet_list_t *generate_WHOHAS(char *chunkfile, bt_config_t *config){
   	fclose(fp2);
   	printf("DEBUG generate_WHOHAS OVER\n");
   	return ret;
+}
+
+/*
+ * Below is for chunk operation
+ */
+
+void init_chunk_owner_list(chunk_owner_list_t* list, char* data){
+    if(list == NULL){
+        list = (chunk_owner_list_t*)malloc(sizeof(chunk_owner_list_t));
+        memcpy(list->chunk_hash, data, 20);
+        list->highest_idx = -1;
+        list->chosen_node_idx = -1;
+        list->next = NULL;
+    }
+    else{
+        chunk_owner_list_t* new_list = (chunk_owner_list_t*)malloc(sizeof(chunk_owner_list_t));
+        memcpy(new_list->chunk_hash, data, 20);
+        new_list->highest_idx = -1;
+        new_list->chosen_node_idx = -1;
+        new_list->next = list;
+        list = new_list;
+    }    
+}
+
+chunk_owner_list_t* search_chunk(chunk_owner_list_t* c_list, char* data){
+    while(c_list!=NULL){
+        if(strncmp(c_list->chunk_hash, data, 20) == 0)
+            return c_list;
+        c_list = c_list->next;
+    }
+    // Return NULL if not found
+    return NULL;
+}
+
+int add_to_chunk_owner_list(struct sockaddr_in *addr, int sock, chunk_owner_list_t* c_list, char* data){
+    chunk_owner_list_t* dest_node;
+    struct sockaddr_in* new_addr;
+    // Search for the right chunk
+    if((dest_node=search_chunk(c_list, data)) == NULL)
+        return -1;
+    // add the addr to the list
+    dest_node->highest_idx += 1;
+    if(dest_node->highest_idx > 127){
+        printf("Node list cannot be more than 128\n");
+        return -1;
+    }
+    new_addr = (struct sockaddr_in*)malloc(sizeof(struct sockaddr_in));
+    dest_node->list[dest_node->highest_idx] = new_addr;
+    dest_node->sock[dest_node->highest_idx] = sock; 
+    return 0;
+}
+
+chunk_owner_list_t* get_chunk_owner(char* data, chunk_owner_list_t* c_list, int sock_freq[1025]){
+    chunk_owner_list_t* dest_node;
+    int min_sock = -1;
+    int min_owner_idx = -1;
+    int min_owner_num = -1;
+    if((dest_node=search_chunk(c_list, data)) == NULL)
+        return NULL;
+    if(dest_node->highest_idx == -1)
+        return NULL;
+    int i;
+    // Loop to choose the least frequent use node
+    for(i=0; i<=dest_node->highest_idx; i++){
+        int sock = dest_node->sock[i];
+        // First 
+        if(min_sock == -1){
+            min_sock = sock;
+            min_owner_idx = i;
+            min_owner_num = sock_freq[sock];
+        }
+        else if(min_owner_num > sock_freq[sock]){
+            min_sock = sock;
+            min_owner_idx = i;
+            min_owner_num = sock_freq[sock];
+        }
+    }
+    if(min_owner_idx == -1){
+        printf("No peer has this chunk\n");
+        return NULL;
+    }
+    if(dest_node->chosen_node_idx != -1){
+        sock_freq[dest_node->sock[dest_node->chosen_node_idx]] -= 1;
+    }
+    dest_node->chosen_node_idx = min_owner_idx;
+    sock_freq[min_sock] += 1; 
+    return dest_node;
 }
 

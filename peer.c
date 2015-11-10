@@ -35,6 +35,10 @@ void peer_run(bt_config_t *config);
 bt_config_t config;
 int sock;
 
+/* Chunk owner list Declair, type define at packet.h */
+chunk_owner_list_t* c_list = NULL;
+int sock_freq[1025];
+
 packet_tracker_t *p_tracker = NULL;
 
 
@@ -117,6 +121,7 @@ void process_inbound_udp(int sock) {
   data_packet_t *packet = build_packet_from_buf(buf);
 
   /* next parse this packet and build the response packet*/
+  /* NEW: add parameter socket address from the one who send the packet */
   data_packet_list_t *response_list = handle_packet(packet, &config, sock, p_tracker);
 
   /* finally call spiffy_sendto() to send back the packet*/
