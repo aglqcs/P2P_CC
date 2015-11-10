@@ -35,6 +35,10 @@ void peer_run(bt_config_t *config);
 bt_config_t config;
 int sock;
 
+/* Chunk owner list Declair, type define at packet.h */
+chunk_owner_list_t* c_list = NULL;
+int sock_freq[1025];
+
 packet_tracker_t *p_tracker = NULL;
 
 
@@ -140,6 +144,9 @@ void process_inbound_udp(int sock) {
     return;
   }
   data_packet_list_t *response_list = handle_packet(recv_packet, &config, (int)target_id, p_tracker);
+  
+  /* NEW: add parameter socket address from the one who send the packet */
+  //data_packet_list_t *response_list = handle_packet(packet, &config, sock, p_tracker);
 
   /* finally call spiffy_sendto() to send back the packet*/
   if( NULL == response_list ){
@@ -301,6 +308,7 @@ void peer_run(bt_config_t *config) {
       }
     }
   }
+  LOGCLOSE();
 }
 
 
