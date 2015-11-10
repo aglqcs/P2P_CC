@@ -35,8 +35,9 @@ typedef struct packet_tracker{
     struct packet_tracker *next;
 } packet_tracker_t;
 
+
 data_packet_t *init_packet(char type, char *data, int length);
 int read_chunkfile(char * chunkfile, char *ret);
 data_packet_t *build_packet_from_buf(char *buf);
 data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, int sockfd, packet_tracker_t *p_tracker);
-data_packet_list_t *generate_WHOHAS(char *chunkfile, bt_config_t* config);
+data_packet_list_t *generate_WHOHAS(char *chunkfile, bt_config_t* config, char *output);

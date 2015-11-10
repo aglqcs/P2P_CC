@@ -67,7 +67,7 @@ void broadcast(data_packet_t *packet, bt_config_t *config){
         int p = spiffy_sendto(sock, packet, ntohs(packet->header.packet_len), 0, (struct sockaddr *) &node->addr, sizeof(struct sockaddr));
         // Iterate to next node
         if( p < 0 ){
-          printf("Can not broad cast\n");
+          printf("Can not broadcast\n");
         }
         node = node->next;
     }         
@@ -118,10 +118,28 @@ void process_inbound_udp(int sock) {
 	 buf);
 */
   /* first generate the incoming packet */
-  data_packet_t *packet = build_packet_from_buf(buf);
-
+  data_packet_t *recv_packet = build_packet_from_buf(buf);
+  //recv_packet->header.ack_num = ntohl(recv_packet->header.ack_num);
+  //recv_packet->header.seq_num = ntohl(recv_packet->header.seq_num);
+  
   /* next parse this packet and build the response packet*/
-  data_packet_list_t *response_list = handle_packet(packet, &config, sock, p_tracker);
+  bt_peer_t *node;
+  short target_id = -1;
+  node = config.peers;
+  while(node!=NULL){
+    if( from.sin_family == node->addr.sin_family
+        &&  from.sin_port == node->addr.sin_port
+        &&  from.sin_addr.s_addr == node->addr.sin_addr.s_addr) {
+        target_id = node->id;
+      break;
+    }  
+    node = node->next;
+  }      
+  if( target_id == -1){
+    printf("Can not locate id\n");
+    return;
+  }
+  data_packet_list_t *response_list = handle_packet(recv_packet, &config, (int)target_id, p_tracker);
 
   /* finally call spiffy_sendto() to send back the packet*/
   if( NULL == response_list ){
@@ -134,11 +152,12 @@ void process_inbound_udp(int sock) {
     for( head = response_list; head != NULL; head = head->next ){
       data_packet_t *packet = head->packet;
       
+
       if( packet->header.packet_type == 3 ){
-        printf("DEBUG : SEND DATA SEQ = %d offset = %d\n", packet->header.seq_num, packet->header.ack_num);
+        printf("DEBUG : SEND DATA SEQ = %d\n", packet->header.seq_num);
       }
        if( packet->header.packet_type == 4 ){
-        printf("DEBUG : SEND ACK ACK = %d offset = %d\n", packet->header.ack_num, packet->header.seq_num);
+        printf("DEBUG : SEND ACK ACK = %d\n", packet->header.ack_num);
       }
      
       /* check timer if already send and within timeout , then dont send */
@@ -157,8 +176,14 @@ void process_inbound_udp(int sock) {
         //   fprintf(stderr,"RANDOM DISCARD THIS PACKET\n");
          //}
          //else{
-          int p = spiffy_sendto(sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *) &from, sizeof(struct sockaddr));
-
+          packet->header.ack_num = ntohl(packet->header.ack_num);
+          packet->header.seq_num = ntohl(packet->header.seq_num);
+          int p = spiffy_sendto(sock, packet,  ntohs(packet->header.packet_len), 0, (struct sockaddr *) &from, sizeof(struct sockaddr));
+          if( p <= 0 ){
+            printf("Inbound_udp send to sock %d ret = %d", sock, p);
+          }
+          else{
+          }
 
 //          }
           if( packet->header.packet_type == 3){
@@ -178,7 +203,7 @@ void process_get(char *chunkfile, char *outputfile) {
   /* Here open the chunkfile, and write data based on the content of chunkfile*/
   /* notice that here I hard code the length of data to 100, is this enough ?*/ 
 
-  data_packet_list_t *whohas_list = generate_WHOHAS(chunkfile, &config);
+  data_packet_list_t *whohas_list = generate_WHOHAS(chunkfile, &config, outputfile);
 
   if( NULL == whohas_list){
     printf("can not generate a packet\n");
@@ -264,9 +289,11 @@ void peer_run(bt_config_t *config) {
         /* ignore dummy head */
         if( packet->header.seq_num == -441) 
           continue; 
-
+        
         printf("DEBUG timer out seq = %d offset = %d\n", packet->header.seq_num, packet->header.ack_num);
-        int p = spiffy_sendto(head->sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *)head->from, sizeof(struct sockaddr));
+        packet->header.ack_num = ntohl(packet->header.ack_num);
+        packet->header.seq_num = ntohl(packet->header.seq_num);
+        int p = spiffy_sendto(head->sock, packet,  ntohs(packet->header.packet_len), 0, (struct sockaddr *)head->from, sizeof(struct sockaddr));
 
         /* reduce the ssthresh */
         process_packet_loss( head->packet->header.ack_num );

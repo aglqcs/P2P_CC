@@ -16,6 +16,7 @@
 #define TIMEOUT 3
 
 typedef struct data{
+	int socket;
 	int offset;
 	char *content; // 512 * 1024 byte data
 	char state[CHUNK_PACKET_NUMBER];
@@ -40,13 +41,16 @@ typedef struct data_list{
 typedef struct data_chunk{
 	int acked;
 	int recved;
-	char content[1024];
+	int length;
+	char content[1500];
 } data_chunk_t;
 
 
 typedef struct recv_buffer{
 	int expected;
+	int socket;
 	int offset;
+	int total_recv;
 	data_chunk_t chunks[CHUNK_PACKET_NUMBER];
 } recv_buffer_t;
 
@@ -62,6 +66,7 @@ typedef struct File_manager{
 	int chunk_count;
 	int *offset;
 	int top;
+	char *output_location;
 } file_manager_t;
 
 

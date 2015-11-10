@@ -7,14 +7,14 @@
 #include <netinet/in.h>
 #include "flow_control.h"
 
-extern data_packet_list_t* send_data(int offset);
-extern void init_datalist(int offset, char *content);
-extern data_packet_list_t* recv_data(data_packet_t *packet, int offset);
-extern void init_recv_buffer(int offset);
-extern data_packet_list_t* handle_ack(int offset , int ack_number, packet_tracker_t *p_tracker);
-extern recv_buffer_t *get_buffer_by_offset(int offset);
-extern int is_buffer_full(int offset);
-extern void copy_chunk_data(char *buffer, int offset, int chunkpos);
+extern data_packet_list_t* send_data(int socket);
+extern void init_datalist(int socket,int offset, char *content);
+extern data_packet_list_t* recv_data(data_packet_t *packet, int socket);
+extern int init_recv_buffer(int offset, int socket);
+extern data_packet_list_t* handle_ack(int socket , int ack_number, packet_tracker_t *p_tracker);
+extern recv_buffer_t *get_buffer_by_offset(int socket);
+extern int is_buffer_full(int socket);
+extern int copy_chunk_data(char *buffer, int offset,int chunkpos);
 /*
 for convenient show the structrue here
 
@@ -41,12 +41,13 @@ int check_file_manager(bt_config_t* config){
 		return -2;
 	}
 
-	printf("DEBUG: GO into file_manager, chunkcount = %d\n", file_manager.chunk_count);
+	printf("DEBUG: GO into file_manager, chunkcount = %d", file_manager.chunk_count);
 	int i;
 
 	/*for test*/
 	int full_count = 0;
 	for(i = 0;i < file_manager.chunk_count; i ++){
+
 		if( -1 == is_buffer_full(file_manager.offset[i])){
 			printf("DEBUG : chunk %d NOTFULL\n", file_manager.offset[i]);
 		}
@@ -67,21 +68,31 @@ int check_file_manager(bt_config_t* config){
 
 	/* if get here means the file is full*/
 	// here write back and return 1
-	printf("DEBUG: File is full, writing back to disk location = %s\n", config->output_file);
-	
-	FILE *fp = fopen(config->output_file, "wb");
+	//printf("DEBUG: File is full, writing back to disk location = %s\n", output_location);
+	printf("strleng = %s\n" ,config->output_file);
+	FILE *fp = fopen(config->output_file, "wb+");
+	int count = 0;
 	for(i = 0;i < file_manager.chunk_count; i ++){
+		printf("Writing chunk offset = %d\n", file_manager.offset[i]);
 		int j;
-		char temp[1024];
-		memset(temp, 0 , 1024);
+		char temp[1500];
+		memset(temp, 0 , 1500);
+		for(j = 0;j < 512; j ++){
+			int length = copy_chunk_data(temp, file_manager.offset[i], j);
+			fwrite(temp, 1, length,fp);
+			count += length;
+
+		}
+
+		/*
 		for(j = 0;j < 512 ; j ++){
 			copy_chunk_data(temp, file_manager.offset[i], j);
 			fwrite(temp,1, 1024,fp);
 			memset(temp, 0 , 1024);
-		}
+		}*/
 		
 	}
-	printf("GET FILE\n");
+	printf("GET FILE length = %d\n",count);
 
 	/* close the file_manager */
 	file_manager.init = 0;
@@ -171,7 +182,6 @@ data_packet_t *init_packet(char type, char *data, int length){
 			memcpy(packet->data, data, length);
 
 	}
-	printf("packetlen = %d", packet->header.packet_len);
 	packet->header.magicnum = htons(packet->header.magicnum);
     packet->header.header_len = htons(packet->header.header_len);
     packet->header.packet_len = htons(packet->header.packet_len);
@@ -326,12 +336,17 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 	/*	read a incoming packet, 
 		return a list of response packets
 	*/
-	printf("handle_packet() type == %d \n", packet->header.packet_type);
+	packet->header.magicnum = ntohs(packet->header.magicnum);
+    packet->header.header_len = ntohs(packet->header.header_len);
+    packet->header.packet_len = ntohs(packet->header.packet_len);
+    packet->header.seq_num = ntohl(packet->header.seq_num);
+    packet->header.ack_num = ntohl(packet->header.ack_num);
+	printf("RECV handle_packet() type == %d length = %d socket = %d\n", packet->header.packet_type,packet->header.packet_len,sockfd );
 	  if( packet->header.packet_type == 3  ){
-        printf("DEBUG : RECV packet with type = DATA seq = %d\n", packet->header.seq_num);
+        printf("|||| RECV packet with type = DATA seq = %d\n", packet->header.seq_num);
       }
       if(packet->header.packet_type == 4){
-        printf("DEBUG : RECV packet with type = ACK ack = %d\n", packet->header.ack_num);
+        printf("|||| RECV packet with type = ACK ack = %d\n", packet->header.ack_num);
       }
 
 	if(packet->header.packet_type == 0){
@@ -411,7 +426,10 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 				return NULL;
 			}
 			printf("DEBUG init recv_buffer with offset = %d\n", offset);
-			init_recv_buffer(offset);
+			if ( -1 == init_recv_buffer(offset,sockfd)){
+				printf("Can not allocate recv_buffer\n");
+				continue;	
+			}
 
 			data[20] = '\0';
 			if ( ret == NULL ){
@@ -445,17 +463,17 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 		int offset = get_off_set_from_master_chunkfile(hash, config);
 
 		/* init the flow control machine for sending back the data */
-		init_datalist(offset,data);
+		init_datalist(sockfd, offset,data);
 		/* and call the first send */
 
-		data_packet_list_t *ret = send_data(offset);
+		data_packet_list_t *ret = send_data(sockfd);
 
 		return ret;
 	}
 	else if ( packet->header.packet_type == 3 ){
 		/* if the incoming packet is an DATA packet */
-		int offset = packet->header.ack_num;
-		data_packet_list_t *ret = recv_data(packet, offset);
+		//int offset = packet->header.ack_num;
+		data_packet_list_t *ret = recv_data(packet, sockfd);
 		
 		/* this datapacket may be the last packet, check if it is then write back to disk */
 		/*
@@ -471,8 +489,8 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 	}
 	else if( packet->header.packet_type == 4){
 		/* if the incoming packet is an ACK packet */
-		int offset = packet->header.seq_num;
-		data_packet_list_t *ret = handle_ack(offset , packet->header.ack_num, p_tracker);
+		//int offset = packet->header.seq_num;
+		data_packet_list_t *ret = handle_ack(sockfd , packet->header.ack_num, p_tracker);
 		return ret;
 	}
 	else{
@@ -483,11 +501,12 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 	return NULL;
 }
 
-data_packet_list_t *generate_WHOHAS(char *chunkfile, bt_config_t *config){
+data_packet_list_t *generate_WHOHAS(char *chunkfile, bt_config_t *config, char *outputfile){
 	/*
 		this function returns a list of WHOHAS packets when user type GET command
 	*/
 	printf("DEBUG generate_WHOHAS()\n");
+	strncpy(config->output_file,outputfile,120);
 	file_manager.init = 1;
 	file_manager.chunk_count = 0;
 	file_manager.top = 0;
