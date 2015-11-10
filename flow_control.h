@@ -1,4 +1,4 @@
-
+#include "log.h"
 
 #define CHUNK_PACKET_NUMBER 512
 

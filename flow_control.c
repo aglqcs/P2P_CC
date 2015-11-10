@@ -29,6 +29,7 @@ void process_packet_loss(int offset){
     d->data->send_window = 1;
     d->data->congestion_control_state = SLOWSTART;
     d->data->increase_rate = 1;
+    LOGIN(offset, 1);
 }
 
 /*
@@ -168,6 +169,9 @@ void congestion_control(data_t* data){
     if(data == NULL){
         return;
     } 
+    
+    int current_window_size = data->send_window;
+
     if(data->congestion_control_state == SLOWSTART){
         // sending window reaches max value
         if(data->ssthresh == data->send_window){
@@ -186,6 +190,9 @@ void congestion_control(data_t* data){
             data->increase_rate = 0;
         }
     }
+    // DO LOGIN
+    if(current_window_size != data->send_window)
+        LOGIN(data->offset, data->send_window);
 }
 /*
 
@@ -533,3 +540,4 @@ void process_packet_loss(data_list_t *d){
     d->data->congestion_control_state = SLOWSTART;
     d->data->increase_rate = 1;
 }*/
+
