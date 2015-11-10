@@ -275,6 +275,7 @@ void peer_run(bt_config_t *config) {
       }
     }
   }
+  LOGCLOSE();
 }
 
 
