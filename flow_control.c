@@ -288,6 +288,15 @@ data_packet_list_t* handle_ack(int offset , int ack_number, packet_tracker_t *p_
 void init_recv_buffer(int offset){
 	int i;
 	printf("DEBUG initing offset = %d\n", offset);
+	/* first check if already exists */
+	/*
+	recv_buffer_list_t *p;
+	for( p = recv_list; p != NULL; p = p ->next){
+		if( p->buffer->offset == offset ){
+			return;
+		}
+	}*/
+
 	recv_buffer_list_t *new_element = (recv_buffer_list_t *)malloc( sizeof(recv_buffer_list_t));
 	new_element->buffer = (recv_buffer_t *)malloc( sizeof(recv_buffer_t));
 

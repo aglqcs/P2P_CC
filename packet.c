@@ -125,7 +125,7 @@ data_packet_t *init_packet(char type, char *data, int length){
 /*	This function write the packet header and data and return a packet object
 	notice that here I DO NOT write the seq and ack of the header
 */
-	printf("init_packet() type = %c \n", type);
+	printf("init_packet() type = %c length = %d\n", type, length);
 	unsigned int data_length;
 	if( data == NULL){
 		data_length = 0;
@@ -160,7 +160,7 @@ data_packet_t *init_packet(char type, char *data, int length){
 		padding[0] = data_length / 20;
 		padding[1] = padding[2] = padding[3] = 1;
 		strcat(packet->data, padding);
-		memcpy( &packet->data[4], data, strlen(data));
+		memcpy( &packet->data[4], data, length);
 	
 		packet->header.packet_len += 4;
 
@@ -171,6 +171,7 @@ data_packet_t *init_packet(char type, char *data, int length){
 			memcpy(packet->data, data, length);
 
 	}
+	printf("packetlen = %d", packet->header.packet_len);
 	packet->header.magicnum = htons(packet->header.magicnum);
     packet->header.header_len = htons(packet->header.header_len);
     packet->header.packet_len = htons(packet->header.packet_len);
@@ -509,9 +510,10 @@ data_packet_list_t *generate_WHOHAS(char *chunkfile, bt_config_t *config){
   			fclose(fp);
   			return NULL;
   		}
+  		printf("DEBUG hash = %s\n", line);
+
   		hex2binary((char*)line, 40, (uint8_t *)(data + count));
 
-  		printf("DEBUG hash = %s\n", data + count);
   		count += 20;
   	
   		memset(line, 0, 40);

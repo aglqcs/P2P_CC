@@ -64,10 +64,14 @@ void broadcast(data_packet_t *packet, bt_config_t *config){
             continue;
         }   
         // Send request
-        spiffy_sendto(sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *) &node->addr, sizeof(struct sockaddr));
+        int p = spiffy_sendto(sock, packet, ntohs(packet->header.packet_len), 0, (struct sockaddr *) &node->addr, sizeof(struct sockaddr));
         // Iterate to next node
+        if( p < 0 ){
+          printf("Can not broad cast\n");
+        }
         node = node->next;
     }         
+    printf("Ending broadcast\n");
     return;
 }
 
@@ -148,15 +152,15 @@ void process_inbound_udp(int sock) {
         }
       }
       if( find == 0){
-           int r = rand();
-         if( r % 20 < -1 &&( packet->header.packet_type == 3 || packet->header.packet_type == 4)){
-           fprintf(stderr,"RANDOM DISCARD THIS PACKET\n");
-         }
-         else{
+       //    int r = rand();
+       //  if( r % 20 < 10 &&( packet->header.packet_type == 3 || packet->header.packet_type == 4)){
+        //   fprintf(stderr,"RANDOM DISCARD THIS PACKET\n");
+         //}
+         //else{
           int p = spiffy_sendto(sock, packet, sizeof(data_packet_t), 0, (struct sockaddr *) &from, sizeof(struct sockaddr));
 
 
-          }
+//          }
           if( packet->header.packet_type == 3){
             p_tracker = create_timer(p_tracker, packet, sock, &from);
 

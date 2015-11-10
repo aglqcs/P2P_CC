@@ -1,0 +1,9 @@
+To run tests, please follow these steps:
+
+1) Copy your peer to p2-tests directory
+
+   $ cp /path/to/your/peer/peer .
+
+2) Run tests
+
+   $ python tests.py
