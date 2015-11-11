@@ -170,7 +170,6 @@ void congestion_control(data_t* data){
         return;
     } 
     
-    int current_window_size = data->send_window;
 
     if(data->congestion_control_state == SLOWSTART){
         // sending window reaches max value
@@ -547,7 +546,6 @@ packet_tracker_t* create_timer(packet_tracker_t *p_tracker, data_packet_t *packe
         packet_tracker_t *itr = p_tracker;
         packet_tracker_t *pre = NULL;
 
-        int offset = packet->header.ack_num;
         int seq = packet->header.seq_num;
         while(itr != NULL){
             if( itr->seq == packet->header.seq_num){

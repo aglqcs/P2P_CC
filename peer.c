@@ -192,7 +192,8 @@ void process_inbound_udp(int sock) {
         }
         printf("\n");
         int r = rand();
-        if( r % 20 < 5 &&( packet->header.packet_type == 3 || packet->header.packet_type == 4)){
+        if( r % 20 < -5 &&( packet->header.packet_type == 3 || packet->header.packet_type == 4)){
+        /* use a random number to simulate the packet loss , currently it is 100% deliver */ 
            printf("RANDOM DISCARD THIS PACKET\n");
            continue;
         }

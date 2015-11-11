@@ -468,7 +468,6 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 
 			printf("In node check offset = %d node_id = %d\n", offset,sockfd);
 
-			int used = 0;
         	/* for this chunk if I never use this node before, use this node, otherwise return*/
         	chunk_owner_list_t *p;
         	for( p = file_manager.already_used; p != NULL; p = p->next){
@@ -476,11 +475,9 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
         			if( p->address->sin_family == node->addr.sin_family
         				&& p->address->sin_port == node->addr.sin_port
         				&& p->address->sin_addr.s_addr == node->addr.sin_addr.s_addr){
-        				used = 1;
         			}
         		}
         	}
-        	//if(used == 1) continue;
 
 			// after decide the node that I will be talking to, init the recv list
 			// if decide to use this node {
