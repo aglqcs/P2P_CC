@@ -109,7 +109,7 @@ data_packet_list_t* send_data(int socket){
 			/* make sure we do not reach the outside of the available data*/
 			if( to_send->end >= CHUNK_PACKET_NUMBER - 1){
 				printf("last packet already sent\n");
-				return NULL;
+				return ret;
 			}
 
 			to_send->end ++;

@@ -47,7 +47,7 @@ int check_file_manager(bt_config_t* config){
 	int i;
 
 	/*for test*/
-/*
+
 	int full_count = 0;
 	for(i = 0;i < file_manager.chunk_count; i ++){
 
@@ -60,7 +60,8 @@ int check_file_manager(bt_config_t* config){
 		}
 	}
 	printf("DEBUG : full chunk = %d\n", full_count);
-*/
+
+
 	for(i = 0;i < file_manager.chunk_count; i ++){
 		printf("Offset[%d] = %d\n", i, file_manager.offset[i]);
 		int buffer_full = is_buffer_full(file_manager.offset[i]);

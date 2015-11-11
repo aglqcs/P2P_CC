@@ -5,9 +5,9 @@ static struct timespec start_time;
 
 void LOGOPEN(char *path){
     if(path == NULL)
-        log_fd = fopen("problem2-peer.txt", "a+");
+        log_fd = fopen("problem2-peer.txt", "w+");
     else
-        log_fd = fopen(path, "a+");
+        log_fd = fopen(path, "w+");
 
     clock_gettime(CLOCK_MONOTONIC, &start_time); /* mark start time */
 
