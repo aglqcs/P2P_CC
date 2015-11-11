@@ -1,0 +1,17 @@
+1. For testing, we build a node.map with 5 different peers and try to send and broadcast to each node with WHOHAS and the node with 
+file will send back IHAVE.
+
+2. We also test the scenario where the file doesn't exist or the node doesn't have the particular chunk.
+
+3. According to the sample script for checkpoint 2, we are able to rebuild the file from several chunks and distribute the flow to 
+different peers for faster transmitting. (Receiver side test1)
+
+4. We also test point to point transfer, which means asking a peer for more than one chunk. (Receiver side test2)
+
+5. Assume a lostless network, send a chunk to a peer, monitoring the window size for congestion control. (Sender size test1)
+
+6. Assume packet loss for random packets loss (reduce the queue size or hard code random function for selecting random packet), 
+guarantee reliability by guarantee the file will retransfer. (Sender size)
+
+7. Robustness: while a peer is determined as dead (if timeout), the server will try to look for another peer for restart the chunk 
+transfer. 
