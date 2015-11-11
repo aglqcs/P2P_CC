@@ -29,7 +29,7 @@ void process_packet_loss(int socket){
     d->data->send_window = 1;
     d->data->congestion_control_state = SLOWSTART;
     d->data->increase_rate = 1;
-    LOGIN(offset, 1);
+    LOGIN(d->data->offset, 1);
 }
 
 /*
@@ -98,7 +98,7 @@ data_packet_list_t* send_data(int socket){
 	int diff = to_send->end - to_send->start;
 
 	/* if diff less than max window size, send packets */
-	printf("DEBUG: Call send_data, can send packet = %d, start = %d, end = %d, window = %d\n", to_send->send_window - diff,to_send->start, to_send->end, to_send->send_window);
+	printf("DEBUG: Call send_data, can send packet = %d, start = %d, end = %d, window = %d offset = %d\n", to_send->send_window - diff,to_send->start, to_send->end, to_send->send_window,to_send->offset);
 	
 	//if( diff < to_send->send_window  && to_send->end <=  8 ){
 	if( diff < to_send->send_window  && to_send->end <=  CHUNK_PACKET_NUMBER - 1 ){
@@ -213,15 +213,21 @@ packet_tracker_t* remove_from_tracker(packet_tracker_t* current, int offset, int
 int remove_from_tracker(packet_tracker_t* current, int socket, int seq){
 	if( current == NULL ) return -1;
 		//if( current->packet->header.seq_num == seq && current->packet->header.ack_num == offset){
-	if( current->sock == socket && current->packet->header.seq_num == seq){
+
+	int this_seq_num = ntohl(current->packet->header.seq_num);
+
+	if( current->sock == socket && this_seq_num -1 == seq){
 		*current = *current->next;
 		return 1;
 	}	
 	packet_tracker_t* prev = current;
 	packet_tracker_t* p = current->next;
+
 	while( p != NULL){
 		//if( p->packet->header.seq_num == seq && p->packet->header.ack_num == offset){
-		if( current->sock == socket && current->packet->header.seq_num == seq){
+		this_seq_num = ntohl(p->packet->header.seq_num);
+		printf("current seq = %d, seq = %d this_sock = %d sock = %d\n", this_seq_num, seq, p->sock, socket);
+		if( p->sock == socket && this_seq_num -1 == seq){
 			prev->next = p->next;
 			return 1;			
 		}
@@ -260,8 +266,10 @@ data_packet_list_t* handle_ack(int socket , int ack_number, packet_tracker_t *p_
 	}
 
 	int i;
+	printf("\nDEBUG : recv Ack start, window start = %d window end = %d\n", to_send->start, to_send->end);
 
 	for(i = to_send->start + 1; i <= ack_number && i < CHUNK_PACKET_NUMBER; i ++){
+		printf("checking i = %d to_send->State = %d\n",i,to_send->state[i]);
 		if( to_send->state[i] == UNSEND){
 			printf("Should never happens, a packet not even send but got acked\n");
 			return NULL;
@@ -297,11 +305,11 @@ data_packet_list_t* handle_ack(int socket , int ack_number, packet_tracker_t *p_
 int init_recv_buffer(int offset, int socket){
 	int i;
 	printf("DEBUG initing offset = %d socket = %d\n", offset, socket);
-	/* first check if already exists */
 	
+	/* first check if already exists */
 	recv_buffer_list_t *p;
 	for( p = recv_list; p != NULL; p = p ->next){
-		if( p->buffer->socket == socket || p->buffer->offset == offset){
+		if( (p->buffer->socket == socket || p->buffer->offset == offset) && p->buffer->busy == 1){
 			return -1;
 		}
 	}
@@ -309,6 +317,7 @@ int init_recv_buffer(int offset, int socket){
 	recv_buffer_list_t *new_element = (recv_buffer_list_t *)malloc( sizeof(recv_buffer_list_t));
 	new_element->buffer = (recv_buffer_t *)malloc( sizeof(recv_buffer_t));
 
+	new_element->buffer->busy = 1;
 	new_element->buffer->expected = 1;
 	new_element->buffer->socket = socket;
 	new_element->buffer->offset = offset;
@@ -336,9 +345,9 @@ int init_recv_buffer(int offset, int socket){
 }
 
 
-data_packet_list_t* recv_data(data_packet_t *recv_packet, int socket){
+data_packet_list_t* recv_data(data_packet_t *recv_packet, int socket, int *offset){
 	int seq = recv_packet->header.seq_num;
-	if( seq >= CHUNK_PACKET_NUMBER ){
+	if( seq > CHUNK_PACKET_NUMBER ){
 		return NULL;
 	}
 	printf("RECV DATA seq = %d socket = %d\n", seq, socket);
@@ -354,17 +363,23 @@ data_packet_list_t* recv_data(data_packet_t *recv_packet, int socket){
 			find = 1;
 			int i;
 
+			for(i = 0;i < 512; i ++){
+				if( head->buffer->chunks[i].recved == FALSE ){
+					printf("First missing chunk = %d\n", i);
+					break;
+				}
+			}
 			/* return an ack with ack = seq, and mark the 'acked' and 'recved', store the data*/		
 			/* if never saw this part before, write it to memory*/
 			if( head->buffer->chunks[seq].recved == FALSE){
+
 				head->buffer->chunks[seq].recved = TRUE;
+				printf("modify %d recved = true\n", seq);
   				int length = recv_packet->header.packet_len - recv_packet->header.header_len;
 
   				head->buffer->total_recv += length;
   				head->buffer->chunks[seq].length = length;
-  				if( length != 1400){
-  					printf("QQQQQQ %d %d %d\n",length, head->buffer->chunks[seq].length, seq);
-  				}
+  				
   				for(i = 0;i < length; i ++){
   					head->buffer->chunks[seq].content[i] = recv_packet->data[i];
   				}
@@ -398,6 +413,13 @@ data_packet_list_t* recv_data(data_packet_t *recv_packet, int socket){
 			//packet->header.ack_num = i - 1;
 
 			head->buffer->expected = i;
+
+
+			
+			/*update timer for this data chunk*/
+			*offset = head->buffer->offset;
+			
+
 
 			printf("DEBUG packet ack = %d, next expected = %d i = %d \n", packet->header.ack_num, head->buffer->expected, i);
 			if ( ret == NULL ){
@@ -448,7 +470,6 @@ recv_buffer_t *get_buffer_by_socket(int socket){
 int copy_chunk_data(char *buffer, int offset, int chunkpos){
 	recv_buffer_list_t *head;
 	for( head = recv_list ; head != NULL; head = head->next ){
-		int pos = 0;
 		if( offset == head->buffer->offset ){
 			int i;
 			if( head->buffer->chunks[chunkpos].recved == FALSE){
@@ -470,7 +491,16 @@ int copy_chunk_data(char *buffer, int offset, int chunkpos){
 
 		}
 	}
-	
+	return 0;
+}
+
+void release_buffer(int offset){
+	recv_buffer_list_t *head;
+	for( head = recv_list ; head != NULL; head = head->next ){
+		if( offset == head->buffer->offset ){
+			head->buffer->busy = 0;
+		}
+	}
 }
 
 int is_buffer_full(int offset){
@@ -479,25 +509,15 @@ int is_buffer_full(int offset){
 	for( head = recv_list ; head != NULL; head = head->next ){
 		if( offset == head->buffer->offset ){
 			find = 1;
-			int i;
-			printf("CURRENT STATUS offset = %d, diff = %d recv = %d\n", offset, 1024*512 - head->buffer->total_recv, head->buffer->total_recv);
 			if( 1024*512 - head->buffer->total_recv != 0 ){
 				return -1;
 			}
-			/*
-			for(i = 0;i < 512; i ++){
-				if( head->buffer->chunks[i].recved == FALSE){
-					printf("Offset = %d first missing chunks id = %d\n", offset,i);
-					return -1;
-				}
-			}*/
 		}
 	}
 	if ( find == -1){
 		return -1;
 	}
 	else{
-		printf("is_buffer_full : buffer[%d] == FULL\n",offset);
 		return 1;
 	}
 }
@@ -506,7 +526,7 @@ int is_buffer_full(int offset){
 /* Timer control */
 
 packet_tracker_t* create_timer(packet_tracker_t *p_tracker, data_packet_t *packet, int sock, struct sockaddr_in *from){
-    printf("Create TIMEer with seq = %d from = %d\n", packet->header.seq_num, from);
+    printf("Create TIMEer with seq = %d nodeid =%d \n", packet->header.seq_num, sock);
     if(p_tracker == NULL){
         p_tracker = (packet_tracker_t *)malloc(sizeof(packet_tracker_t));
         p_tracker->send_time = time(NULL);

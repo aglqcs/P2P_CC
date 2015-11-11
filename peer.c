@@ -71,11 +71,11 @@ void broadcast(data_packet_t *packet, bt_config_t *config){
         int p = spiffy_sendto(sock, packet, ntohs(packet->header.packet_len), 0, (struct sockaddr *) &node->addr, sizeof(struct sockaddr));
         // Iterate to next node
         if( p < 0 ){
-          printf("Can not broadcast\n");
+         // printf("Can not broadcast\n");
         }
         node = node->next;
     }         
-    printf("Ending broadcast\n");
+    //printf("Ending broadcast\n");
     return;
 }
 
@@ -180,29 +180,22 @@ void process_inbound_udp(int sock) {
         }
       }
       if( find == 0){
-       //    int r = rand();
-       //  if( r % 20 < 10 &&( packet->header.packet_type == 3 || packet->header.packet_type == 4)){
-        //   fprintf(stderr,"RANDOM DISCARD THIS PACKET\n");
-         //}
-         //else{
+        if( packet->header.packet_type == 3){
+          p_tracker = create_timer(p_tracker, packet, (int)target_id, &from);
+        }
+
+        int r = rand();
+        if( r % 20 < -10 &&( packet->header.packet_type == 3 || packet->header.packet_type == 4)){
+           printf("RANDOM DISCARD THIS PACKET\n");
+           continue;
+        }
+        else{
           packet->header.ack_num = ntohl(packet->header.ack_num);
           packet->header.seq_num = ntohl(packet->header.seq_num);
-          int p = spiffy_sendto(sock, packet,  ntohs(packet->header.packet_len), 0, (struct sockaddr *) &from, sizeof(struct sockaddr));
-          if( p <= 0 ){
-            printf("Inbound_udp send to sock %d ret = %d", sock, p);
-          }
-          else{
-          }
-
-//          }
-          if( packet->header.packet_type == 3){
-            p_tracker = create_timer(p_tracker, packet, sock, &from);
-
-            packet_tracker_t *p = p_tracker;
-
-
-          }
-
+          int ret = spiffy_sendto(sock, packet,  ntohs(packet->header.packet_len), 0, (struct sockaddr *) &from, sizeof(struct sockaddr));
+          if( ret <= 0 )  printf("Inbound_udp send to sock %d ret = %d", sock, ret);  
+        }
+          
       }
     }
   }
@@ -289,6 +282,17 @@ void peer_run(bt_config_t *config) {
       }
     }
 
+    /* loop all the chunks to check if the node for this chunk fails */
+    data_packet_list_t *potential_whohas = re_generateWhohas(config);
+    if( NULL != potential_whohas){
+      potential_whohas = reverseList(potential_whohas);
+      data_packet_list_t *p;
+      for( p = potential_whohas; p != NULL; p = p->next){
+        data_packet_t *who = p->packet;
+        broadcast(who, config);
+      }
+    }
+
     /* loop all the data packet send and check if packet timeout*/
     packet_tracker_t *head;
     for( head = p_tracker ; head != NULL ;head = head->next ){
@@ -299,13 +303,17 @@ void peer_run(bt_config_t *config) {
         if( packet->header.seq_num == -441) 
           continue; 
         
-        printf("DEBUG timer out seq = %d offset = %d\n", packet->header.seq_num, packet->header.ack_num);
+        printf("DEBUG timer out seq = %d offset = %d\n", packet->header.seq_num);
         packet->header.ack_num = ntohl(packet->header.ack_num);
         packet->header.seq_num = ntohl(packet->header.seq_num);
         int p = spiffy_sendto(head->sock, packet,  ntohs(packet->header.packet_len), 0, (struct sockaddr *)head->from, sizeof(struct sockaddr));
 
+        if( p < 0){
+          printf("Timeout resend error\n");
+        }
         /* reduce the ssthresh */
         process_packet_loss( head->packet->header.ack_num );
+        /* reset timer */
         head->send_time = time(NULL);
       }
     }

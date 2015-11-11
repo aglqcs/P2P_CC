@@ -1,4 +1,6 @@
 #include "log.h"
+#include <time.h>
+#include <netinet/in.h>
 
 #define CHUNK_PACKET_NUMBER 512
 
@@ -50,6 +52,7 @@ typedef struct recv_buffer{
 	int expected;
 	int socket;
 	int offset;
+	int busy;
 	int total_recv;
 	data_chunk_t chunks[CHUNK_PACKET_NUMBER];
 } recv_buffer_t;
@@ -59,14 +62,21 @@ typedef struct recv_buffer_list{
 	struct recv_buffer_list *next;
 } recv_buffer_list_t;
 
-
+typedef struct chunk_owner_list{
+    // Chunk hash map
+  int offset;
+  struct sockaddr_in *address;
+  struct chunk_owner_list *next;
+} chunk_owner_list_t;
 
 typedef struct File_manager{
-	int init;
-	int chunk_count;
-	int *offset;
-	int top;
-	char *output_location;
+  int init;
+  int chunk_count;
+  int *offset;
+  int top;
+  time_t *timer;
+  char *output_location;
+  chunk_owner_list_t *already_used;
 } file_manager_t;
 
 
