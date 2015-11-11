@@ -86,6 +86,7 @@ int main(int argc, char **argv) {
 
   DPRINTF(DEBUG_INIT, "peer.c main beginning\n");
 
+  LOGOPEN(NULL);
 #ifdef TESTING
   config.identity = 1; // your group number here
   strcpy(config.chunk_file, "chunkfile");
@@ -182,8 +183,14 @@ void process_inbound_udp(int sock) {
           p_tracker = create_timer(p_tracker, packet, (int)target_id, &from);
         }
 
+        packet_tracker_t * p = p_tracker;
+        while( p != NULL){
+          printf("(%d,%d) - ",p->seq, p->sock);
+          p = p->next;
+        }
+        printf("\n");
         int r = rand();
-        if( r % 20 < -10 &&( packet->header.packet_type == 3 || packet->header.packet_type == 4)){
+        if( r % 20 < 5 &&( packet->header.packet_type == 3 || packet->header.packet_type == 4)){
            printf("RANDOM DISCARD THIS PACKET\n");
            continue;
         }
@@ -194,6 +201,13 @@ void process_inbound_udp(int sock) {
           if( ret <= 0 )  printf("Inbound_udp send to sock %d ret = %d", sock, ret);  
         }
           
+      }
+      else if( find == 1){
+          if( packet->header.packet_type != 3){
+            int ret = spiffy_sendto(sock, packet,  ntohs(packet->header.packet_len), 0, (struct sockaddr *) &from, sizeof(struct sockaddr));
+            if( ret <= 0 )  printf("Inbound_udp send to sock %d ret = %d", sock, ret);  
+          }
+          printf("Not timeout dont send this packet or not find");
       }
     }
   }
@@ -283,6 +297,10 @@ void peer_run(bt_config_t *config) {
     /* loop all the chunks to check if the node for this chunk fails */
     data_packet_list_t *potential_whohas = re_generateWhohas(config);
     if( NULL != potential_whohas){
+      printf("=======================\n");
+      printf("re_generateWhohas again\n");
+      printf("=======================\n");
+
       potential_whohas = reverseList(potential_whohas);
       data_packet_list_t *p;
       for( p = potential_whohas; p != NULL; p = p->next){
@@ -298,16 +316,17 @@ void peer_run(bt_config_t *config) {
         /* retransmit*/
         data_packet_t *packet = head->packet;
         /* ignore dummy head */
-        if( packet->header.seq_num == -441) 
+        if( head->seq == -441) 
           continue; 
         
-        printf("DEBUG timer out seq = %d offset = %d\n", packet->header.seq_num);
-        packet->header.ack_num = ntohl(packet->header.ack_num);
-        packet->header.seq_num = ntohl(packet->header.seq_num);
-        int p = spiffy_sendto(head->sock, packet,  ntohs(packet->header.packet_len), 0, (struct sockaddr *)head->from, sizeof(struct sockaddr));
+        printf("DEBUG timer out seq = %d \n", head->seq);
+        packet->header.seq_num = htonl(head->seq);
+
+
+        int p = spiffy_sendto(sock, packet,  ntohs(packet->header.packet_len), 0, (struct sockaddr *)head->from, sizeof(struct sockaddr));
 
         if( p < 0){
-          printf("Timeout resend error\n");
+          printf("Timeout resend error = %d\n", p);
         }
         /* reduce the ssthresh */
         process_packet_loss( head->packet->header.ack_num );

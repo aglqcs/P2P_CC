@@ -44,11 +44,11 @@ void init_datalist(int socket, int offset, char *content){
 	new_element->data->offset = offset;
 
 	/* init the congestion control variable */
-	new_element->data->send_window = 4;
-	new_element->data->ssthresh = 8;
+	new_element->data->send_window = 1;
+	new_element->data->ssthresh = 64;
 	new_element->data->congestion_control_state = SLOWSTART;
 	new_element->data->start = new_element->data->end = -1;
-	new_element->data->increase_rate = 0;
+	new_element->data->increase_rate = 1;
 
 	int i;
 	for( i = 0; i < CHUNK_PACKET_NUMBER; i ++){
@@ -180,6 +180,7 @@ void congestion_control(data_t* data){
         }
         else{
             data->send_window += 1;
+	    LOGIN(data->offset, data->send_window);
         }
     }
     else if(data->congestion_control_state == CON_AVOID){
@@ -188,35 +189,19 @@ void congestion_control(data_t* data){
         if(data->increase_rate >= 1){
             data->send_window += 1;
             data->increase_rate = 0;
+	    LOGIN(data->offset, data->send_window);
         }
     }
     // DO LOGIN
-    if(current_window_size != data->send_window)
-        LOGIN(data->offset, data->send_window);
+    // if(current_window_size != data->send_window)
+    //     LOGIN(data->offset, data->send_window);
 }
-/*
 
-packet_tracker_t* remove_from_tracker(packet_tracker_t* current, int offset, int seq){
-	// copy from http://www.ardendertat.com/2011/09/29/programming-interview-questions-5-linkedlist-remove-nodes/
-	
-	if (current == NULL) return NULL;
-
-	if (current->packet->header.seq_num == seq && current->packet->header.ack_num == offset){
-		current = current->next;
-		current = remove_from_tracker(current, offset,seq);
-		}
-	else current->next = remove_from_tracker(current->next, offset, seq);
-
-	return current;
-}
-*/
 int remove_from_tracker(packet_tracker_t* current, int socket, int seq){
 	if( current == NULL ) return -1;
 		//if( current->packet->header.seq_num == seq && current->packet->header.ack_num == offset){
 
-	int this_seq_num = ntohl(current->packet->header.seq_num);
-
-	if( current->sock == socket && this_seq_num -1 == seq){
+	if( current->sock == socket && current->seq -1 == seq){
 		*current = *current->next;
 		return 1;
 	}	
@@ -225,9 +210,7 @@ int remove_from_tracker(packet_tracker_t* current, int socket, int seq){
 
 	while( p != NULL){
 		//if( p->packet->header.seq_num == seq && p->packet->header.ack_num == offset){
-		this_seq_num = ntohl(p->packet->header.seq_num);
-		printf("current seq = %d, seq = %d this_sock = %d sock = %d\n", this_seq_num, seq, p->sock, socket);
-		if( p->sock == socket && this_seq_num -1 == seq){
+		if( p->sock == socket && p->seq -1 == seq){
 			prev->next = p->next;
 			return 1;			
 		}
@@ -253,7 +236,7 @@ data_packet_list_t* handle_ack(int socket , int ack_number, packet_tracker_t *p_
 			char *content = get_content_by_index(to_send, ack_number + 1);
 			data_packet_t *packet = init_packet(3, content, 1024);
 			/* dont forget write seq and offset*/
-			packet->header.seq_num = ack_number + 1;
+			packet->header.seq_num = ack_number + 2;
 			//packet->header.ack_num = offset;
 			process_packet_loss(socket);
 
@@ -269,7 +252,6 @@ data_packet_list_t* handle_ack(int socket , int ack_number, packet_tracker_t *p_
 	printf("\nDEBUG : recv Ack start, window start = %d window end = %d\n", to_send->start, to_send->end);
 
 	for(i = to_send->start + 1; i <= ack_number && i < CHUNK_PACKET_NUMBER; i ++){
-		printf("checking i = %d to_send->State = %d\n",i,to_send->state[i]);
 		if( to_send->state[i] == UNSEND){
 			printf("Should never happens, a packet not even send but got acked\n");
 			return NULL;
@@ -281,6 +263,16 @@ data_packet_list_t* handle_ack(int socket , int ack_number, packet_tracker_t *p_
 			 if( -1 == (remove_from_tracker(p_tracker, socket, i))){
 			 	printf("TRY to discard %d fail\n", i);
 			 }
+			 else{
+			 	printf("Discard %d\n", i);
+			 }
+
+			 packet_tracker_t * p = p_tracker;
+        while( p != NULL){
+          printf("(%d,%d) - ",p->seq, p->sock);
+          p = p->next;
+        }
+        printf("\n");
 		
 		}
 		else{
@@ -405,7 +397,6 @@ data_packet_list_t* recv_data(data_packet_t *recv_packet, int socket, int *offse
 					head->buffer->chunks[seq].acked = TRUE;
 				}
 			}
-
 
 			/* now i-1 is the last recved data */
 			/* return ack is i-1 and expected to see i*/
@@ -533,6 +524,7 @@ packet_tracker_t* create_timer(packet_tracker_t *p_tracker, data_packet_t *packe
         p_tracker->packet = packet;
         p_tracker->next = NULL;
         p_tracker->sock = sock;
+        p_tracker->seq = packet->header.seq_num;
        // p_tracker->from = from;
         p_tracker->from = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
         p_tracker->from->sin_family = from->sin_family;
@@ -545,7 +537,7 @@ packet_tracker_t* create_timer(packet_tracker_t *p_tracker, data_packet_t *packe
         /* dummy head */
         packet_tracker_t *itr = (packet_tracker_t *)malloc(sizeof(packet_tracker_t));
         itr->packet = (data_packet_t *)malloc(sizeof(data_packet_t));
-        itr->packet->header.seq_num = -441;
+        itr->seq = -441;
 
         itr->next = p_tracker;
         p_tracker = itr;
@@ -558,7 +550,7 @@ packet_tracker_t* create_timer(packet_tracker_t *p_tracker, data_packet_t *packe
         int offset = packet->header.ack_num;
         int seq = packet->header.seq_num;
         while(itr != NULL){
-            if( itr->packet->header.seq_num == seq && itr->packet->header.ack_num == offset){
+            if( itr->seq == packet->header.seq_num){
                 printf("Timer for packet = %d already exist\n", seq);
                 itr->send_time = time(NULL);
                 return p_tracker;
@@ -572,6 +564,7 @@ packet_tracker_t* create_timer(packet_tracker_t *p_tracker, data_packet_t *packe
         itr->packet = packet;
         itr->next = NULL;
         itr->sock = sock;
+        itr->seq = seq;
      //   itr->from = from;
   		itr->from = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
         itr->from->sin_family = from->sin_family;

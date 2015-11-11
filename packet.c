@@ -104,6 +104,11 @@ int check_file_manager(bt_config_t* config){
 
 	/* close the file_manager */
 	file_manager.init = 0;
+	free(file_manager.timer);
+	free(file_manager.output_location);
+	free(file_manager.offset);
+	free(file_manager.already_used);
+
 	fclose(fp);
 
 	/*TODO : delete after finish */
@@ -706,13 +711,14 @@ data_packet_list_t *re_generateWhohas(bt_config_t *config){
 		time_t current_time = time(NULL);
 		double diff_t = difftime(current_time, file_manager.timer[i]);
 
-
-		if( diff_t > 5){
-			// set timeout to 8 seconds
+		if( diff_t > 10){
+			// set timeout to 10 seconds
 			/* re-generate whohas for this chunk */
 
 			//first set the current recv buffer(if exists) to invalid
 		//	printf("RE-generate: offset %d time out\n", file_manager.offset[i]);
+			printf("start = %lld , now = %lld diff = %f\n", (long long int)file_manager.timer[i], (long long int)current_time, diff_t);
+
 			release_buffer(offset);
 
 			// get hash value for this offset

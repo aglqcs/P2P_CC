@@ -26,6 +26,7 @@ typedef struct data_packet_list{
 
 typedef struct packet_tracker{
     int sock;
+    int seq;
     struct sockaddr_in *from;
     time_t send_time;
     int expire_time;

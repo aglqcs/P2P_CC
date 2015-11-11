@@ -15,7 +15,7 @@
 #define TRUE 1
 #define FALSE 0
 
-#define TIMEOUT 3
+#define TIMEOUT 1
 
 typedef struct data{
 	int socket;
