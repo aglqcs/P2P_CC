@@ -81,7 +81,8 @@ void broadcast(data_packet_t *packet, bt_config_t *config){
 
 
 int main(int argc, char **argv) {
-
+  LOGOPEN(NULL);  
+  
   bt_init(&config, argc, argv);
 
   DPRINTF(DEBUG_INIT, "peer.c main beginning\n");
@@ -102,6 +103,7 @@ int main(int argc, char **argv) {
 #endif
   
   peer_run(&config);
+  LOGCLOSE();
   return 0;
 }
 
@@ -335,7 +337,6 @@ void peer_run(bt_config_t *config) {
       }
     }
   }
-  LOGCLOSE();
 }
 
 

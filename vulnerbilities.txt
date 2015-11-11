@@ -1,0 +1,9 @@
+1. In the code, we have many fixed size char arrays without carefully examined. Thus buffer overflow is possible.
+
+2. The timeout we set for determine a peer is dead is relativly long. This could cost a problem if the nodes are very active (taking
+too much time to transfer a file). Also, we will discard all the packets once we detect a peer isn't alive if the chunk hasn't yet
+finish been transfered. Thus if the peer has sent a large amount of data but crashes in the last one, we'll have to find a new peer
+and do the whole process again.
+
+3. Since we didn't implement fast recovery, we'll have to reset the status as SLOW_START and set the window size as 1, this will be 
+relatively slow compare to fast recovery.
