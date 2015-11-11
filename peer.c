@@ -130,7 +130,6 @@ void process_inbound_udp(int sock) {
   //recv_packet->header.seq_num = ntohl(recv_packet->header.seq_num);
   
   /* next parse this packet and build the response packet*/
-  printf("INbound = %d, %d, %d\n",from.sin_family, from.sin_port, from.sin_addr.s_addr );
   bt_peer_t *node;
   short target_id = -1;
   node = config.peers;
@@ -193,7 +192,7 @@ void process_inbound_udp(int sock) {
         }
         printf("\n");
         int r = rand();
-        if( r % 20 < 5 &&( packet->header.packet_type == 3 || packet->header.packet_type == 4)){
+        if( r % 20 < -5 &&( packet->header.packet_type == 3 || packet->header.packet_type == 4)){
         /* use a random number to simulate the packet loss , currently it is 100% deliver */ 
            printf("RANDOM DISCARD THIS PACKET\n");
            continue;

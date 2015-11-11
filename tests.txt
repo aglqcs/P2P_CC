@@ -15,3 +15,8 @@ guarantee reliability by guarantee the file will retransfer. (Sender size)
 
 7. Robustness: while a peer is determined as dead (if timeout), the server will try to look for another peer for restart the chunk 
 transfer. 
+
+
+< RESULTS: please refer to 'FileWithLostRate25Percent.png', which is test with packet loss rate of 25%, and 'FlowPerfect.png',
+  which is in a lossless network/ >
+
