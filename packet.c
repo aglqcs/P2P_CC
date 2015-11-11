@@ -6,15 +6,17 @@
 #include "chunk.h"
 #include <netinet/in.h>
 #include "flow_control.h"
+#include <time.h>
 
 extern data_packet_list_t* send_data(int socket);
 extern void init_datalist(int socket,int offset, char *content);
-extern data_packet_list_t* recv_data(data_packet_t *packet, int socket);
+extern data_packet_list_t* recv_data(data_packet_t *packet, int socket, int *offset);
 extern int init_recv_buffer(int offset, int socket);
 extern data_packet_list_t* handle_ack(int socket , int ack_number, packet_tracker_t *p_tracker);
 extern recv_buffer_t *get_buffer_by_offset(int socket);
 extern int is_buffer_full(int socket);
 extern int copy_chunk_data(char *buffer, int offset,int chunkpos);
+extern void release_buffer(int offset);
 /*
 for convenient show the structrue here
 
@@ -45,6 +47,7 @@ int check_file_manager(bt_config_t* config){
 	int i;
 
 	/*for test*/
+/*
 	int full_count = 0;
 	for(i = 0;i < file_manager.chunk_count; i ++){
 
@@ -57,10 +60,15 @@ int check_file_manager(bt_config_t* config){
 		}
 	}
 	printf("DEBUG : full chunk = %d\n", full_count);
-
+*/
 	for(i = 0;i < file_manager.chunk_count; i ++){
 		printf("Offset[%d] = %d\n", i, file_manager.offset[i]);
-		if( -1 == is_buffer_full(file_manager.offset[i])){
+		int buffer_full = is_buffer_full(file_manager.offset[i]);
+		if( buffer_full == 1){
+			/* release it from the recv list, free the node it connect to and may prepare to grab a waiting chunk */
+			release_buffer(file_manager.offset[i]);
+		}
+		if( -1 == buffer_full ){
 			printf("In check_file_manager, file is not full, first unfull offset = %d\n",file_manager.offset[i]);
 			return -1;
 		}
@@ -97,6 +105,8 @@ int check_file_manager(bt_config_t* config){
 	/* close the file_manager */
 	file_manager.init = 0;
 	fclose(fp);
+
+	/*TODO : delete after finish */
 	
 	return 1;
 }
@@ -220,6 +230,33 @@ int find_in_local_has(char *hash, char *local){
 	return 0;
 }
 
+char *get_hash_from_master_chunkfile(int offset, bt_config_t* config){
+	char *hash = malloc(20);
+	char *master_file = config->chunk_file;
+	FILE *fp = fopen(master_file, "r");
+	if( fp == NULL ){
+		printf("Can not locate file %s\n", hash);
+		return NULL;
+	}
+
+	char content_path[512];
+	char temp[40];
+	int index;
+	/* read the content path first */
+	fscanf(fp, "%s %s\n", temp, content_path);
+	fscanf(fp, "%s\n", temp);
+	memset(temp,0 , 40);
+	while( fscanf(fp,"%d %s",&index, temp ) > 0){
+		if( index == offset ){
+			/* calculate the binary hash from the master chunk file */
+			hex2binary((char*)temp, 40, (uint8_t *)(hash));
+			return hash;
+		}
+	}
+	free(hash);
+	return NULL;
+}
+
 int get_off_set_from_master_chunkfile(char *hash, bt_config_t* config){
 	char *master_file = config->chunk_file;
 	FILE *fp = fopen(master_file, "r");
@@ -319,7 +356,7 @@ char* get_data_from_hash(char *hash , bt_config_t* config){
 	return data;
 }
 
-data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, int sockfd,packet_tracker_t *p_tracker){
+data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, int sockfd, packet_tracker_t *p_tracker){
 	/*	read a incoming packet, 
 		return a list of response packets
 	*/
@@ -340,7 +377,7 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 		/* if incoming packet is a WHOHAS packet */
 		/* scan the packet datafiled to fetch the hashes and get the count */
 		int count = packet->data[0];
-
+		printf("WHOHAS %d chunks\n", count);
 		int i;
 		char local_has[100];
 		char data[1500];
@@ -391,6 +428,7 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 		data_packet_list_t *ret = NULL;
 		int count = packet->data[0];
 		int i;
+		printf("starting IHAVE, %d chunks\n", count);
 		for(i = 0;i < count; i ++){
 		/* for each hash value generate a GET packet */
 		/* each GET packet will only contain ONE hash value*/
@@ -401,23 +439,79 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 			for(j = 0;j < 20;j ++ ){
 				data[j] = packet->data[4 + 20 * i + j];
 			}
+			int offset = get_off_set_from_master_chunkfile(data, config);
+			printf("IHAVE registing for chunk = %d \n", offset);
 
 			/*	add node selection here
 			*/
+			/* based on node id, find the address of this node */
+			bt_peer_t *node;
+   			node = config->peers;
+   			while(node != NULL){
+		        // Don't send request to itself
+		        printf("%d \n", node->id);
+		        if(node->id == sockfd){
+		            break;
+		        }   
+		        node = node->next;
+		    }   
+
+		    if(node == NULL){
+		    	printf("Can not locate the node exiting\n");
+		    	exit(0);
+		    }
+
+			printf("In node check offset = %d node_id = %d\n", offset,sockfd);
+
+			int used = 0;
+        	/* for this chunk if I never use this node before, use this node, otherwise return*/
+        	chunk_owner_list_t *p;
+        	for( p = file_manager.already_used; p != NULL; p = p->next){
+        		if( p->offset == offset ){
+        			if( p->address->sin_family == node->addr.sin_family
+        				&& p->address->sin_port == node->addr.sin_port
+        				&& p->address->sin_addr.s_addr == node->addr.sin_addr.s_addr){
+        				used = 1;
+        			}
+        		}
+        	}
+        	//if(used == 1) continue;
 
 			// after decide the node that I will be talking to, init the recv list
 			// if decide to use this node {
-			int offset = get_off_set_from_master_chunkfile(data, config);
 			if( offset == -1){
 				printf("Can not init the recv_buffer with hash = %s\n", data);
-				return NULL;
+				continue;
 			}
 			printf("DEBUG init recv_buffer with offset = %d\n", offset);
+
+
 			if ( -1 == init_recv_buffer(offset,sockfd)){
 				printf("Can not allocate recv_buffer\n");
 				continue;	
 			}
 
+			
+			chunk_owner_list_t *new_element = (chunk_owner_list_t *)malloc(sizeof(chunk_owner_list_t));
+			new_element->address = (struct sockaddr_in*)malloc(sizeof(struct sockaddr_in));
+
+			new_element->offset = offset;
+			
+		    new_element->address->sin_family = node->addr.sin_family;
+        	new_element->address->sin_port = node->addr.sin_port;
+        	new_element->address->sin_addr.s_addr = node->addr.sin_addr.s_addr;    
+
+			if( NULL == file_manager.already_used){
+				file_manager.already_used = new_element;
+				new_element->next = NULL;
+			}
+			else{
+				new_element->next = file_manager.already_used;
+				file_manager.already_used = new_element;
+			}
+
+
+			printf("Generating GET packet to nodeid = %d\n", sockfd);
 			data[20] = '\0';
 			if ( ret == NULL ){
 				ret = (data_packet_list_t *)malloc( sizeof(data_packet_list_t));
@@ -432,10 +526,14 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 				ret = new_block;
 			}
 			memset(data, 0 , 20);
-			// }
-			// else {
-			//	return NULL
-			//}
+
+			/* uodate the timer for this chunk */
+			for(j = 0;j < file_manager.chunk_count; j ++){
+				if( file_manager.offset[j] == offset ){
+					break;
+				}
+			}
+			file_manager.timer[j] = time(NULL);			
 		}
 		return ret;
 	}
@@ -460,15 +558,22 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 	else if ( packet->header.packet_type == 3 ){
 		/* if the incoming packet is an DATA packet */
 		//int offset = packet->header.ack_num;
-		data_packet_list_t *ret = recv_data(packet, sockfd);
+		int offset;
+		printf("Before recv_data seq = %d\n", packet->header.seq_num);
+
+		data_packet_list_t *ret = recv_data(packet, sockfd, &offset);
+		
+
+		int j;
+		for(j = 0;j < file_manager.chunk_count; j ++){
+			if( file_manager.offset[j] == offset ){
+				break;
+			}
+		}
+		file_manager.timer[j] = time(NULL);	
+
 		
 		/* this datapacket may be the last packet, check if it is then write back to disk */
-		/*
-		int full = write_back(sockfd);
-		if( full == 1){
-			printf("successfully get the data chunk, writing back to disk\n");
-		}
-		*/
 		printf("DEBUG after recv_data()\n");
 		check_file_manager(config);
 		printf("DEBUG after check_file_manager()\n");
@@ -477,7 +582,7 @@ data_packet_list_t *handle_packet(data_packet_t *packet, bt_config_t* config, in
 	else if( packet->header.packet_type == 4){
 		/* if the incoming packet is an ACK packet */
 		//int offset = packet->header.seq_num;
-		data_packet_list_t *ret = handle_ack(sockfd , packet->header.ack_num, p_tracker);
+		data_packet_list_t *ret = handle_ack(sockfd , packet->header.ack_num - 1, p_tracker);
 		return ret;
 	}
 	else{
@@ -497,6 +602,7 @@ data_packet_list_t *generate_WHOHAS(char *chunkfile, bt_config_t *config, char *
 	file_manager.init = 1;
 	file_manager.chunk_count = 0;
 	file_manager.top = 0;
+	file_manager.already_used = NULL;
 
   	data_packet_list_t *ret = NULL;
 
@@ -546,6 +652,12 @@ data_packet_list_t *generate_WHOHAS(char *chunkfile, bt_config_t *config, char *
   	}
   	
   	file_manager.offset = (int *)malloc( file_manager.chunk_count * sizeof(int));
+  	file_manager.timer = (time_t *)malloc( file_manager.chunk_count * sizeof(time_t));
+  	int i;
+  	for(i = 0;i < file_manager.chunk_count; i ++){
+  		file_manager.timer[i] = time(NULL);
+  	}
+
   	/* re-read the file to get the offset*/
   	FILE *fp2 = fopen( chunkfile, "r");
   	while( fscanf(fp2, "%d %s\n", &index, line)  > 0 ){
@@ -577,90 +689,49 @@ data_packet_list_t *generate_WHOHAS(char *chunkfile, bt_config_t *config, char *
   	return ret;
 }
 
-/*
- * Below is for chunk operation
- */
 
-void init_chunk_owner_list(chunk_owner_list_t* list, char* data){
-    if(list == NULL){
-        list = (chunk_owner_list_t*)malloc(sizeof(chunk_owner_list_t));
-        memcpy(list->chunk_hash, data, 20);
-        list->highest_idx = -1;
-        list->chosen_node_idx = -1;
-        list->next = NULL;
-    }
-    else{
-        chunk_owner_list_t* new_list = (chunk_owner_list_t*)malloc(sizeof(chunk_owner_list_t));
-        memcpy(new_list->chunk_hash, data, 20);
-        new_list->highest_idx = -1;
-        new_list->chosen_node_idx = -1;
-        new_list->next = list;
-        list = new_list;
-    }    
+data_packet_list_t *re_generateWhohas(bt_config_t *config){
+	int i;
+	data_packet_list_t *ret = NULL;	
+	if( file_manager.init == 0){
+		return NULL;
+	}
+
+	for(i = 0;i < file_manager.chunk_count; i ++){
+		int offset = file_manager.offset[i];
+		if( is_buffer_full(offset) == 1){		
+		  continue;
+		}
+		/* check if chunk timeout */
+		time_t current_time = time(NULL);
+		double diff_t = difftime(current_time, file_manager.timer[i]);
+
+
+		if( diff_t > 5){
+			// set timeout to 8 seconds
+			/* re-generate whohas for this chunk */
+
+			//first set the current recv buffer(if exists) to invalid
+		//	printf("RE-generate: offset %d time out\n", file_manager.offset[i]);
+			release_buffer(offset);
+
+			// get hash value for this offset
+			char *hash = get_hash_from_master_chunkfile(offset,config);
+			data_packet_t *packet = init_packet(0,  hash, 20);
+			data_packet_list_t* new_element = (data_packet_list_t*)malloc( sizeof(data_packet_list_t));
+			new_element->packet = packet;
+			if( ret == NULL ){
+				new_element->next = NULL;
+				ret = new_element;
+			}
+			else{
+				new_element->next = ret;
+				ret = new_element;
+			}
+
+			file_manager.timer[i] = time(NULL);
+
+		} 
+	}
+	return ret;
 }
-
-chunk_owner_list_t* search_chunk(chunk_owner_list_t* c_list, char* data){
-    while(c_list!=NULL){
-        if(strncmp(c_list->chunk_hash, data, 20) == 0)
-            return c_list;
-        c_list = c_list->next;
-    }
-    // Return NULL if not found
-    return NULL;
-}
-
-int add_to_chunk_owner_list(struct sockaddr_in *addr, int sock, chunk_owner_list_t* c_list, char* data){
-    chunk_owner_list_t* dest_node;
-    struct sockaddr_in* new_addr;
-    // Search for the right chunk
-    if((dest_node=search_chunk(c_list, data)) == NULL)
-        return -1;
-    // add the addr to the list
-    dest_node->highest_idx += 1;
-    if(dest_node->highest_idx > 127){
-        printf("Node list cannot be more than 128\n");
-        return -1;
-    }
-    new_addr = (struct sockaddr_in*)malloc(sizeof(struct sockaddr_in));
-    dest_node->list[dest_node->highest_idx] = new_addr;
-    dest_node->sock[dest_node->highest_idx] = sock; 
-    return 0;
-}
-
-chunk_owner_list_t* get_chunk_owner(char* data, chunk_owner_list_t* c_list, int sock_freq[1025]){
-    chunk_owner_list_t* dest_node;
-    int min_sock = -1;
-    int min_owner_idx = -1;
-    int min_owner_num = -1;
-    if((dest_node=search_chunk(c_list, data)) == NULL)
-        return NULL;
-    if(dest_node->highest_idx == -1)
-        return NULL;
-    int i;
-    // Loop to choose the least frequent use node
-    for(i=0; i<=dest_node->highest_idx; i++){
-        int sock = dest_node->sock[i];
-        // First 
-        if(min_sock == -1){
-            min_sock = sock;
-            min_owner_idx = i;
-            min_owner_num = sock_freq[sock];
-        }
-        else if(min_owner_num > sock_freq[sock]){
-            min_sock = sock;
-            min_owner_idx = i;
-            min_owner_num = sock_freq[sock];
-        }
-    }
-    if(min_owner_idx == -1){
-        printf("No peer has this chunk\n");
-        return NULL;
-    }
-    if(dest_node->chosen_node_idx != -1){
-        sock_freq[dest_node->sock[dest_node->chosen_node_idx]] -= 1;
-    }
-    dest_node->chosen_node_idx = min_owner_idx;
-    sock_freq[min_sock] += 1; 
-    return dest_node;
-}
-
